@@ -17,16 +17,16 @@
 
 #include <stdlib.h>
 
-void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<Twaypoint*> destinationsInScenario, IMPLEMENTATION implementation)
+void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
 	// Convenience test: does CUDA work on this machine?
 	cuda_test();
 
-	// Set 
-	agents = std::vector<Ped::Tagent*>(agentsInScenario.begin(), agentsInScenario.end());
+	// Set
+	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
 
 	// Set up destinations
-	destinations = std::vector<Ped::Twaypoint*>(destinationsInScenario.begin(), destinationsInScenario.end());
+	destinations = std::vector<Ped::Twaypoint *>(destinationsInScenario.begin(), destinationsInScenario.end());
 
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
@@ -38,6 +38,15 @@ void Ped::Model::setup(std::vector<Ped::Tagent*> agentsInScenario, std::vector<T
 void Ped::Model::tick()
 {
 	// EDIT HERE FOR ASSIGNMENT 1
+	// 1) retrieve each agent
+	for (Ped::Tagent *agent : agents)
+	{
+		// 2) calculate its next desired position and finally
+		agent->computeNextDesiredPosition();
+		// 3) set its position to the calculated desired one
+		agent->setX(agent->getDesiredX());
+		agent->setY(agent->getDesiredY());
+	}
 }
 
 ////////////
@@ -53,15 +62,16 @@ void Ped::Model::move(Ped::Tagent *agent)
 	set<const Ped::Tagent *> neighbors = getNeighbors(agent->getX(), agent->getY(), 2);
 
 	// Retrieve their positions
-	std::vector<std::pair<int, int> > takenPositions;
-	for (std::set<const Ped::Tagent*>::iterator neighborIt = neighbors.begin(); neighborIt != neighbors.end(); ++neighborIt) {
+	std::vector<std::pair<int, int>> takenPositions;
+	for (std::set<const Ped::Tagent *>::iterator neighborIt = neighbors.begin(); neighborIt != neighbors.end(); ++neighborIt)
+	{
 		std::pair<int, int> position((*neighborIt)->getX(), (*neighborIt)->getY());
 		takenPositions.push_back(position);
 	}
 
 	// Compute the three alternative positions that would bring the agent
 	// closer to his desiredPosition, starting with the desiredPosition itself
-	std::vector<std::pair<int, int> > prioritizedAlternatives;
+	std::vector<std::pair<int, int>> prioritizedAlternatives;
 	std::pair<int, int> pDesired(agent->getDesiredX(), agent->getDesiredY());
 	prioritizedAlternatives.push_back(pDesired);
 
@@ -74,7 +84,8 @@ void Ped::Model::move(Ped::Tagent *agent)
 		p1 = std::make_pair(pDesired.first + diffY, pDesired.second + diffX);
 		p2 = std::make_pair(pDesired.first - diffY, pDesired.second - diffX);
 	}
-	else {
+	else
+	{
 		// Agent wants to walk diagonally
 		p1 = std::make_pair(pDesired.first, agent->getY());
 		p2 = std::make_pair(agent->getX(), pDesired.second);
@@ -83,12 +94,14 @@ void Ped::Model::move(Ped::Tagent *agent)
 	prioritizedAlternatives.push_back(p2);
 
 	// Find the first empty alternative position
-	for (std::vector<pair<int, int> >::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it) {
+	for (std::vector<pair<int, int>>::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it)
+	{
 
 		// If the current position is not yet taken by any neighbor
-		if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end()) {
+		if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end())
+		{
 
-			// Set the agent's position 
+			// Set the agent's position
 			agent->setX((*it).first);
 			agent->setY((*it).second);
 
@@ -104,19 +117,23 @@ void Ped::Model::move(Ped::Tagent *agent)
 /// \param   x the x coordinate
 /// \param   y the y coordinate
 /// \param   dist the distance around x/y that will be searched for agents (search field is a square in the current implementation)
-set<const Ped::Tagent*> Ped::Model::getNeighbors(int x, int y, int dist) const {
+set<const Ped::Tagent *> Ped::Model::getNeighbors(int x, int y, int dist) const
+{
 
 	// create the output list
-	// ( It would be better to include only the agents close by, but this programmer is lazy.)	
-	return set<const Ped::Tagent*>(agents.begin(), agents.end());
+	// ( It would be better to include only the agents close by, but this programmer is lazy.)
+	return set<const Ped::Tagent *>(agents.begin(), agents.end());
 }
 
-void Ped::Model::cleanup() {
-	// Nothing to do here right now. 
+void Ped::Model::cleanup()
+{
+	// Nothing to do here right now.
 }
 
 Ped::Model::~Model()
 {
-	std::for_each(agents.begin(), agents.end(), [](Ped::Tagent *agent){delete agent;});
-	std::for_each(destinations.begin(), destinations.end(), [](Ped::Twaypoint *destination){delete destination; });
+	std::for_each(agents.begin(), agents.end(), [](Ped::Tagent *agent)
+				  { delete agent; });
+	std::for_each(destinations.begin(), destinations.end(), [](Ped::Twaypoint *destination)
+				  { delete destination; });
 }
