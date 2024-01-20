@@ -16,6 +16,7 @@
 #include <thread>
 
 #include <stdlib.h>
+int K = 4; // How many threads we will spawn
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
@@ -35,18 +36,70 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 	setupHeatmapSeq();
 }
 
-void Ped::Model::tick()
+void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 {
-	// EDIT HERE FOR ASSIGNMENT 1
-	// 1) retrieve each agent
-	for (Ped::Tagent *agent : agents)
+	int N = agents.size();
+	int chunkSize = N / K; // Base chunk size
+	int remainder = N % K; // Remainder to be distributed
+
+	// Calculate the starting and ending index for this thread
+	int start = thread_id * chunkSize + std::min(thread_id, remainder);
+	int end = start + chunkSize + (thread_id < remainder ? 1 : 0);
+
+	// Alternative solution:
+	/* if (thread_id < remainder) {
+		int start = thread_id * chunkSize + thread_id;
+		int end = start + chunkSize + 1;
+	} else {
+		int start = thread_id * chunkSize + remainder;
+		int end = start + chunkSize;
+	} */
+
+	for (int i = start; i < end; i++)
 	{
-		// 2) calculate its next desired position and finally
+		Ped::Tagent *agent = agents[i];
+		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
 		// 3) set its position to the calculated desired one
 		agent->setX(agent->getDesiredX());
 		agent->setY(agent->getDesiredY());
 	}
+}
+
+void Ped::Model::tick()
+{
+	// C++ threads implementation
+	/* 	std::thread threads[K];
+		for (int i = 0; i < K; i++)
+		{
+			threads[i] = std::thread(agent_tasks, i, agents);
+		}
+		for (int i = 0; i < K; i++)
+		{
+			threads[i].join();
+		} */
+
+	// OMP implementation 1
+	/* #pragma omp parallel for default(none)
+		for (Ped::Tagent *agent : agents)
+		{
+			// 2) calculate its next desired position
+			agent->computeNextDesiredPosition();
+			// 3) set its position to the calculated desired one
+			agent->setX(agent->getDesiredX());
+			agent->setY(agent->getDesiredY());
+		} */
+
+	// OMP implementation 2
+
+	/* for (Ped::Tagent *agent : agents)
+	{
+		// 2) calculate its next desired position
+		agent->computeNextDesiredPosition();
+		// 3) set its position to the calculated desired one
+		agent->setX(agent->getDesiredX());
+		agent->setY(agent->getDesiredY());
+	} */
 }
 
 ////////////
