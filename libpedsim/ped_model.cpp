@@ -46,15 +46,6 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 	int start = thread_id * chunkSize + std::min(thread_id, remainder);
 	int end = start + chunkSize + (thread_id < remainder ? 1 : 0);
 
-	// Alternative solution:
-	/* if (thread_id < remainder) {
-		int start = thread_id * chunkSize + thread_id;
-		int end = start + chunkSize + 1;
-	} else {
-		int start = thread_id * chunkSize + remainder;
-		int end = start + chunkSize;
-	} */
-
 	for (int i = start; i < end; i++)
 	{
 		Ped::Tagent *agent = agents[i];
@@ -79,7 +70,7 @@ void Ped::Model::tick()
 			threads[i].join();
 		} */
 
-	// OMP implementation 1
+	// OpenMP implementation
 	/* #pragma omp parallel for default(none)
 		for (Ped::Tagent *agent : agents)
 		{
@@ -90,8 +81,7 @@ void Ped::Model::tick()
 			agent->setY(agent->getDesiredY());
 		} */
 
-	// OMP implementation 2
-
+	// Serial implementation
 	/* for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
