@@ -17,6 +17,9 @@
 
 #include <stdlib.h>
 int K = 4; // How many threads we will spawn
+// version: serial, openMP, c++ threads
+// serial = 0, openMP = 1, threads = 2
+int version = 1;
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
@@ -60,36 +63,42 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 void Ped::Model::tick()
 {
 	// C++ threads implementation
-	/* 	std::thread threads[K];
-		for (int i = 0; i < K; i++)
-		{
-			threads[i] = std::thread(agent_tasks, i, agents);
-		}
-		for (int i = 0; i < K; i++)
-		{
-			threads[i].join();
-		} */
+	if (version == 2) {
+	std::thread threads[K];
+	for (int i = 0; i < K; i++)
+	{
+		threads[i] = std::thread(agent_tasks, i, agents);
+	}
+	for (int i = 0; i < K; i++)
+	{
+		threads[i].join();
+	}
+	}
 
 	// OpenMP implementation
-	/* #pragma omp parallel for default(none)
-		for (Ped::Tagent *agent : agents)
-		{
-			// 2) calculate its next desired position
-			agent->computeNextDesiredPosition();
-			// 3) set its position to the calculated desired one
-			agent->setX(agent->getDesiredX());
-			agent->setY(agent->getDesiredY());
-		} */
-
-	// Serial implementation
-	/* for (Ped::Tagent *agent : agents)
+	if (version == 1) {
+	#pragma omp parallel for default(none)
+	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
 		// 3) set its position to the calculated desired one
 		agent->setX(agent->getDesiredX());
 		agent->setY(agent->getDesiredY());
-	} */
+	}
+	}
+
+	// Serial implementation
+	if (version == 0) {
+	for (Ped::Tagent *agent : agents)
+	{
+		// 2) calculate its next desired position
+		agent->computeNextDesiredPosition();
+		// 3) set its position to the calculated desired one
+		agent->setX(agent->getDesiredX());
+		agent->setY(agent->getDesiredY());
+	}
+	}
 }
 
 ////////////
