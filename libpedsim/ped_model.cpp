@@ -8,6 +8,7 @@
 #include "ped_model.h"
 #include "ped_waypoint.h"
 #include "ped_model.h"
+#include "ped_agent.h"
 #include <iostream>
 #include <stack>
 #include <algorithm>
@@ -16,24 +17,26 @@
 #include <thread>
 
 #include <stdlib.h>
-int K = 4; // How many threads we will spawn
-// version: serial, openMP, c++ threads
-// serial = 0, openMP = 1, threads = 2
-int version = 1;
+int K = 8; // How many threads we will spawn
+
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
 	// Convenience test: does CUDA work on this machine?
 	cuda_test();
-
-	// Set
+	
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
-
+	
 	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint *>(destinationsInScenario.begin(), destinationsInScenario.end());
 
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
+	// Set up vectorized agents:
+	if (implementation == VECTOR) {
+		this->agentsSoA = TagentSoA(agentsInScenario);
+	}
+
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
@@ -62,8 +65,16 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 
 void Ped::Model::tick()
 {
+	// Vectorized OpenMP ?
+	if (this-> implementation == VECTOR) {
+	#pragma omp parallel for num_threads(2) default(none)
+	for (int i = 0; i < agents.size(); i+=4) {
+		this->agentsSoA.computeNextDesiredPositionsVectorized();
+	}
+	}
+
 	// C++ threads implementation
-	if (version == 2) {
+	if (this->implementation == PTHREAD) {
 	std::thread threads[K];
 	for (int i = 0; i < K; i++)
 	{
@@ -76,8 +87,8 @@ void Ped::Model::tick()
 	}
 
 	// OpenMP implementation
-	if (version == 1) {
-	#pragma omp parallel for default(none)
+	if (this->implementation == OMP) {
+	#pragma omp parallel for num_threads(8) default(none)
 	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
@@ -89,7 +100,7 @@ void Ped::Model::tick()
 	}
 
 	// Serial implementation
-	if (version == 0) {
+	if (this->implementation == SEQ) {
 	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position

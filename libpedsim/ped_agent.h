@@ -23,7 +23,7 @@ using namespace std;
 
 namespace Ped {
 	class Twaypoint;
-
+	// ---------------------- Tagent ---------------------
 	class Tagent {
 	public:
 		Tagent(int posX, int posY);
@@ -47,6 +47,9 @@ namespace Ped {
 
 		// Adds a new waypoint to reach for this agent
 		void addWaypoint(Twaypoint* wp);
+
+		// Retrieves the agents' waypoints
+		deque<Twaypoint*> getWaypoints() { return waypoints; };
 
 	private:
 		Tagent() {};
@@ -73,6 +76,31 @@ namespace Ped {
 
 		// Returns the next destination to visit
 		Twaypoint* getNextDestination();
+	};
+
+	// ---------------------- TagentSoA ---------------------
+	class TagentSoA {
+		public: 
+		TagentSoA() {}
+		// Sets the attributes for all agents (xP, yP, xDesP, yDesP, waypoints)
+		TagentSoA(std::vector<Tagent*> &agentsInScenario);
+	
+		// Arrays of all agents' relevant attributes
+		// xP: current x coordinates 
+		// yP: current y coordinates
+		// xDesP: desired x coordinates
+		// yDesP: desired y coordinates
+		// waypoints: destinations?
+		std::vector<float> xP;
+		std::vector<float> yP;
+		std::vector<float> xDesP;
+		std::vector<float> yDesP;
+		std::vector< deque<Twaypoint*> > waypoints;
+
+		// Vectorized functions:
+		void computeNextDesiredPositionsVectorized();
+		void getNextDestinationsVectorized();
+
 	};
 }
 

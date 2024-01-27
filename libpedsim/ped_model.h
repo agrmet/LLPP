@@ -63,6 +63,9 @@ namespace Ped
 
 		// The agents in this scenario
 		std::vector<Tagent *> agents;
+
+		// ----------------- Vectorized agents ---------------------
+		TagentSoA agentsSoA;
  
 		// The waypoints in this scenario
 		std::vector<Twaypoint *> destinations;

@@ -7,9 +7,28 @@
 //
 #include "ped_agent.h"
 #include "ped_waypoint.h"
+#include <stdio.h>
 #include <math.h>
 
 #include <stdlib.h>
+
+// ------------ TagentSoA -------------- 
+// New vectorized struct for Tagent (SoA)
+Ped::TagentSoA::TagentSoA(std::vector<Tagent*> &agentsInScenario){
+	for (int i = 0; i < agentsInScenario.size(); i++){
+		this->xP.push_back(agentsInScenario[i]->getX());
+		this->yP.push_back(agentsInScenario[i]->getY());
+		this->xDesP.push_back(agentsInScenario[i]->getDesiredX());
+		this->yDesP.push_back(agentsInScenario[i]->getDesiredY());
+		this->waypoints.push_back(agentsInScenario[i]->getWaypoints());
+	}
+}
+
+void Ped::TagentSoA::computeNextDesiredPositionsVectorized() {
+	printf ("slay");
+	return;
+}
+// ------------- Tagent -----------------
 
 Ped::Tagent::Tagent(int posX, int posY) {
 	Ped::Tagent::init(posX, posY);
