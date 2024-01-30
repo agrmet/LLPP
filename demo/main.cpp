@@ -67,7 +67,7 @@ int main(int argc, char*argv[]) {
 		// Reading the scenario file and setting up the crowd simulation model
 		Ped::Model model;
 		ParseScenario parser(scenefile);
-		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::SEQ);
+		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::VECTOR);
 
 		// Default number of steps to simulate. Feel free to change this.
 		const int maxNumberOfStepsToSimulate = 100000;
@@ -86,7 +86,7 @@ int main(int argc, char*argv[]) {
 			{
 				Ped::Model model;
 				ParseScenario parser(scenefile);
-				model.setup(parser.getAgents(), parser.getWaypoints(), Ped::SEQ);
+				model.setup(parser.getAgents(), parser.getWaypoints(), Ped::VECTOR);
 				PedSimulation simulation(model, NULL, timing_mode);
 				// Simulation mode to use when profiling (without any GUI)
 				std::cout << "Running reference version...\n";

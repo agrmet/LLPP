@@ -111,6 +111,7 @@ namespace Ped {
 		// Vectorized functions:
 		void computeNextDesiredPositionsVectorized(int idx);
 		void getNextDestinationsVectorized(int idx);
+		void updateCoordinatesVectorized(int idx, std::vector<Tagent*> &agentsInScenario);
 
 	};
 }

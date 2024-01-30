@@ -70,6 +70,7 @@ void Ped::Model::tick()
 	#pragma omp parallel for num_threads(2) default(none)
 	for (int i = 0; i < agents.size(); i+=4) {
 		this->agentsSoA.computeNextDesiredPositionsVectorized(i);
+		this->agentsSoA.updateCoordinatesVectorized(i,agents);
 	}
 	}
 
