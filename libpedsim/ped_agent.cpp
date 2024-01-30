@@ -9,6 +9,8 @@
 #include "ped_waypoint.h"
 #include <stdio.h>
 #include <math.h>
+#include <emmintrin.h>
+
 
 #include <stdlib.h>
 
@@ -20,11 +22,69 @@ Ped::TagentSoA::TagentSoA(std::vector<Tagent*> &agentsInScenario){
 		this->yP.push_back(agentsInScenario[i]->getY());
 		this->xDesP.push_back(agentsInScenario[i]->getDesiredX());
 		this->yDesP.push_back(agentsInScenario[i]->getDesiredY());
-		this->waypoints.push_back(agentsInScenario[i]->getWaypoints());
+		this->waypointsAll.push_back(agentsInScenario[i]->getWaypoints());
+	}
+	for (int i = 0; i < waypointsAll.size(); i++) {
+		this->xWP.push_back(waypointsAll[i].front()->getx());
+        this->yWP.push_back(waypointsAll[i].front()->gety());
+        this->id.push_back(waypointsAll[i].front()->getid());
+        this->r.push_back(waypointsAll[i].front()->getr());
 	}
 }
 
-void Ped::TagentSoA::computeNextDesiredPositionsVectorized() {
+void Ped::TagentSoA::getNextDestinationsVectorized(int idx) {
+	// booleans to store if these agents reached their destinations (bool* not good need float)
+	bool agentsReachedDestination[4];
+	// x coordinates
+    __m128 x = _mm_load_ps(xP[idx]);
+	// y coordinates
+	__m128 y = _mm_load_ps(yP[idx]);
+	// waypoints x coordinates
+	__m128 wpx = _mm_load_ps(xWP[idx]);
+	// waypoints y coordinates
+	__m128 wpy = _mm_load_ps(yWP[idx]);
+	// waypoints radiuses
+	__m128 rad = _mm_load_ps(r[idx]);
+
+	// double diffX = destination->getx() - x;
+	diffX = _mm_sub_ps(wpx, x);
+	// double diffY = destination->gety() - y;
+	diffY = _mm_sub_ps(wpy, y);
+	// double length = sqrt(diffX * diffX + diffY * diffY);
+	__m128 length = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(diffX, diffX), _mm_mul_ps(diffY, diffY)));
+	
+	// agentReachedDestination = length < destination->getr();
+	_mm_store_ps(agentsReachedDestination, _mm_cmplt_ps(length, rad));
+
+	// loop through the 4 agents
+	for (int a = 0; a < 4; a++){
+		// Case 1: agent has reached destination (or has no current destination);
+		// get next destination if available
+		if (agentsReachedDestination[a] && !waypointsAll[idx+a].empty()) {
+				// Retrieve next destination from the queue of waypoints:
+				// nextDestination = waypoints.front();
+				Twaypoint* nextDestination = waypointsAll[idx + a].front(); 
+				// Move this destination to the back of the queue:
+				// waypoints.push_back(destination);
+				// waypoints.pop_front();
+				waypointsAll[idx + a].push_back(nextDestination);
+				waypointsAll[idx + a].pop_front();
+
+				// Update destination information for this agent:
+				id[idx + a] = nextDestination->getid();
+				r[idx + a] = nextDestination->getr();
+				xWP[idx + a] = nextDestination->getx();
+				yWP[idx + a] = nextDestination->gety();
+			}
+		}
+		// else: do nothing. No need to update. 
+		// Case 2: agent has not yet reached destination, continue to move towards
+		// current destination
+	}
+
+
+void Ped::TagentSoA::computeNextDesiredPositionsVectorized(int idx) {
+	getNextDestinationsVectorized(idx);
 	printf ("slay");
 	return;
 }

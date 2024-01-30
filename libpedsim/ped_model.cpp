@@ -69,7 +69,7 @@ void Ped::Model::tick()
 	if (this-> implementation == VECTOR) {
 	#pragma omp parallel for num_threads(2) default(none)
 	for (int i = 0; i < agents.size(); i+=4) {
-		this->agentsSoA.computeNextDesiredPositionsVectorized();
+		this->agentsSoA.computeNextDesiredPositionsVectorized(i);
 	}
 	}
 

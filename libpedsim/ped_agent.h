@@ -48,7 +48,7 @@ namespace Ped {
 		// Adds a new waypoint to reach for this agent
 		void addWaypoint(Twaypoint* wp);
 
-		// Retrieves the agents' waypoints
+		// Retrieves the agent's waypoints
 		deque<Twaypoint*> getWaypoints() { return waypoints; };
 
 	private:
@@ -90,18 +90,30 @@ namespace Ped {
 		// yP: current y coordinates
 		// xDesP: desired x coordinates
 		// yDesP: desired y coordinates
-		// waypoints: destinations?
 		std::vector<float> xP;
 		std::vector<float> yP;
 		std::vector<float> xDesP;
 		std::vector<float> yDesP;
-		std::vector< deque<Twaypoint*> > waypoints;
+
+		// Waypoint attributes:
+		// xWP: all agents' x coordinate-waypoints
+		// yWP: all agents' y coordinate-waypoints
+		// id: all agents' waypoint-id's
+		// r: all agents' waypoint-radius
+		std::vector<float> xWP;
+		std::vector<float> yWP;
+		std::vector<float> id;
+		std::vector<float> r;
+
+		// The queue of destinations that all agents still has to visit
+		std::vector< deque<Twaypoint*> > waypointsAll;
 
 		// Vectorized functions:
-		void computeNextDesiredPositionsVectorized();
-		void getNextDestinationsVectorized();
+		void computeNextDesiredPositionsVectorized(int idx);
+		void getNextDestinationsVectorized(int idx);
 
 	};
 }
+
 
 #endif
