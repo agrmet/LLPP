@@ -128,21 +128,60 @@ void Ped::TagentSoA::computeNextDesiredPositionsVectorized(int idx) {
 	return;
 }
 
-void Ped::TagentSoA::updateCoordinatesVectorized(int idx, std::vector<Tagent*> &agentsInScenario) {
-	// Load desired (x,y) coordinates
-    __m128 desX = _mm_load_ps(&xDesP[idx]);
-	__m128 desY = _mm_load_ps(&yDesP[idx]);
+void Ped::TagentSoA::computePositionsVectorized(int idx) {
+	// floats to store if these agents reached their destinations
+	float agentsReachedDestination[4];
+	// x coordinates
+    __m128 x = _mm_load_ps(&xP[idx]);
+	// y coordinates
+	__m128 y = _mm_load_ps(&yP[idx]);
+	// waypoints x coordinates
+	__m128 wpx = _mm_load_ps(&xWP[idx]);
+	// waypoints y coordinates
+	__m128 wpy = _mm_load_ps(&yWP[idx]);
+	// waypoints radiuses
+	__m128 rad = _mm_load_ps(&r[idx]);
+	// find distance to destination
+	__m128 diffX = _mm_sub_ps(wpx, x);
+	__m128 diffY = _mm_sub_ps(wpy, y);
+	__m128 length = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(diffX, diffX), _mm_mul_ps(diffY, diffY)));	
 
-	// Store new (x,y) coordinates
-	_mm_store_ps(&xP[idx], desX);
-	_mm_store_ps(&yP[idx], desY);
+	_mm_store_ps(agentsReachedDestination, _mm_cmplt_ps(length, rad));
 
-	// Update Agents-struct for plotting
-	// TODO: Sometimes SEGFAULT (probably when not div by 4), updated position doesn't show on graphics. Why?
+	// loop through the 4 agents
 	for (int a = 0; a < 4; a++){
-		agentsInScenario[idx + a]->setX(xP[idx + a]);
-		agentsInScenario[idx + a]->setY(yP[idx + a]);
-	}
+		// get next destination if available
+		if (agentsReachedDestination[a] && !waypointsAll[idx+a].empty()) {
+				// Get agent's reached destination:
+				Twaypoint* destination = waypointsAll[idx + a].front();
+				// Pop and put reached destination to the back of the que:
+				waypointsAll[idx + a].pop_front();
+				waypointsAll[idx + a].push_back(destination);
+				// Get next destination:
+				Twaypoint* nextDestination = waypointsAll[idx + a].front(); 
+
+				// Update destination information for this agent:
+				id[idx + a] = nextDestination->getid();
+				r[idx + a] = nextDestination->getr();
+				xWP[idx + a] = nextDestination->getx();
+				yWP[idx + a] = nextDestination->gety();
+			}
+		}
+		// else: do nothing. No need to update.
+
+	// calculate next pos on its way towards destination:
+	__m128 desX = _mm_add_ps(x, _mm_div_ps(diffX, length));
+	__m128 desY = _mm_add_ps(y, _mm_div_ps(diffY, length));
+	// Round coordinates to int:
+	__m128 roundX = _mm_round_ps(desX, (_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC));
+	__m128 roundY = _mm_round_ps(desY, (_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC));
+
+	// Update desired positions:
+	_mm_store_ps(&xDesP[idx], roundX);
+	_mm_store_ps(&yDesP[idx], roundY);
+	// Update x and y coordinates:
+	_mm_store_ps(&xP[idx], roundX);
+	_mm_store_ps(&yP[idx], roundY);
 }
 
 // ------------- Tagent -----------------

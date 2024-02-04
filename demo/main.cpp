@@ -86,7 +86,7 @@ int main(int argc, char*argv[]) {
 			{
 				Ped::Model model;
 				ParseScenario parser(scenefile);
-				model.setup(parser.getAgents(), parser.getWaypoints(), Ped::VECTOR);
+				model.setup(parser.getAgents(), parser.getWaypoints(), Ped::SEQ);
 				PedSimulation simulation(model, NULL, timing_mode);
 				// Simulation mode to use when profiling (without any GUI)
 				std::cout << "Running reference version...\n";
@@ -99,7 +99,7 @@ int main(int argc, char*argv[]) {
 
 			// Change this variable when testing different versions of your code. 
 			// May need modification or extension in later assignments depending on your implementations
-			Ped::IMPLEMENTATION implementation_to_test = Ped::SEQ;
+			Ped::IMPLEMENTATION implementation_to_test = Ped::VECTOR;
 			{
 				Ped::Model model;
 				ParseScenario parser(scenefile);
