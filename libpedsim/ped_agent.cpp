@@ -31,6 +31,26 @@ Ped::TagentSoA::TagentSoA(std::vector<Tagent*> &agentsInScenario){
         this->id.push_back(waypointsAll[i].front()->getid());
         this->r.push_back(waypointsAll[i].front()->getr());
 	}
+
+// Adding dummies (not sure if needed): 
+	
+/* 	// Add dummies if number of agents is not divisible by 4:
+	while (xP.size() % 4 != 0) {
+		std::deque<Ped::Twaypoint*> dummyWP;
+		this->xP.push_back(0);
+		this->yP.push_back(0);
+		this->xDesP.push_back(0);
+		this->yDesP.push_back(0);
+		this->waypointsAll.push_back(dummyWP);
+	}
+
+	// Add dummies if number of waypoints is not divisible by 4:
+	while (xWP.size() % 4 != 0) {
+		this->xWP.push_back(0);
+        this->yWP.push_back(0);
+        this->id.push_back(0);
+        this->r.push_back(0);
+	} */
 }
 
 void Ped::TagentSoA::getNextDestinationsVectorized(int idx) {
@@ -58,12 +78,12 @@ void Ped::TagentSoA::getNextDestinationsVectorized(int idx) {
 		// Case 1: agent has reached destination (or has no current destination);
 		// get next destination if available
 		if (agentsReachedDestination[a] && !waypointsAll[idx+a].empty()) {
-				// waypointsAll holds all waypoint including current at top
+				// Get agent's reached destination:
 				Twaypoint* destination = waypointsAll[idx + a].front();
-				// pop and reinsert current destination
+				// Pop and put reached destination to the back of the que:
 				waypointsAll[idx + a].pop_front();
 				waypointsAll[idx + a].push_back(destination);
-				// checkout nextDestination
+				// Get next destination:
 				Twaypoint* nextDestination = waypointsAll[idx + a].front(); 
 
 				// Update destination information for this agent:
@@ -71,8 +91,6 @@ void Ped::TagentSoA::getNextDestinationsVectorized(int idx) {
 				r[idx + a] = nextDestination->getr();
 				xWP[idx + a] = nextDestination->getx();
 				yWP[idx + a] = nextDestination->gety();
-
-				printf("<Agent [%d]> New dest=(%lf,%lf), Current pos=(%lf,%lf)\n", idx+a,xWP[idx+a],yWP[idx+a],xP[idx+a],yP[idx+a]);
 			}
 		}
 		// else: do nothing. No need to update. 
@@ -83,8 +101,6 @@ void Ped::TagentSoA::getNextDestinationsVectorized(int idx) {
 
 void Ped::TagentSoA::computeNextDesiredPositionsVectorized(int idx) {
 	getNextDestinationsVectorized(idx);
-	
-	// TODO: Repeated loads/calc of x,y,wpx,wpy,diffX,diffY,length. Merge with getNextDestinationsVectorized?
 	// x coordinates
     __m128 x = _mm_load_ps(&xP[idx]);
 	// y coordinates
@@ -101,10 +117,14 @@ void Ped::TagentSoA::computeNextDesiredPositionsVectorized(int idx) {
 	// calculate next pos on its way towards destination
 	__m128 desX = _mm_add_ps(x, _mm_div_ps(diffX, length));
 	__m128 desY = _mm_add_ps(y, _mm_div_ps(diffY, length));
-	// update struct
+	// Update desired positions:
 	_mm_store_ps(&xDesP[idx], _mm_round_ps(desX, (_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC)));
 	_mm_store_ps(&yDesP[idx], _mm_round_ps(desY, (_MM_FROUND_TO_NEAREST_INT |_MM_FROUND_NO_EXC)));
-
+	// Update x and y coordinates:
+	desX = _mm_load_ps(&xDesP[idx]);
+	desY = _mm_load_ps(&yDesP[idx]);
+	_mm_store_ps(&xP[idx], desX);
+	_mm_store_ps(&yP[idx], desY);
 	return;
 }
 
@@ -120,8 +140,8 @@ void Ped::TagentSoA::updateCoordinatesVectorized(int idx, std::vector<Tagent*> &
 	// Update Agents-struct for plotting
 	// TODO: Sometimes SEGFAULT (probably when not div by 4), updated position doesn't show on graphics. Why?
 	for (int a = 0; a < 4; a++){
-		// agentsInScenario[idx + a]->setX(xP[idx + a]);
-		// agentsInScenario[idx + a]->setY(yP[idx + a]);
+		agentsInScenario[idx + a]->setX(xP[idx + a]);
+		agentsInScenario[idx + a]->setY(yP[idx + a]);
 	}
 }
 
