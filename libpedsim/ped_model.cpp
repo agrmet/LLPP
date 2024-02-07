@@ -67,7 +67,7 @@ void Ped::Model::tick()
 {
 	// Vectorized OpenMP
 	if (this-> implementation == VECTOR) {
-	#pragma omp parallel for num_threads(4) default(none)
+	#pragma omp parallel for num_threads(8) default(none)
 	// Compute each agent's next position, all these computations are vectorized:
 	for (int i = 0; i < agents.size(); i+=4) {
 		// this->agentsSoA.computeNextDesiredPositionsVectorized(i);
@@ -76,7 +76,7 @@ void Ped::Model::tick()
 		this->agentsSoA.computePositionsVectorized(i);
 	}
 	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
-	#pragma omp parallel for num_threads(4) default(none)
+	#pragma omp parallel for num_threads(8) default(none)
 		for (int i = 0; i < agents.size(); i++){
 			agents[i]->setX(this->agentsSoA.xP[i]);
 			agents[i]->setY(this->agentsSoA.yP[i]);
@@ -99,7 +99,7 @@ void Ped::Model::tick()
 
 	// OpenMP implementation
 	if (this->implementation == OMP) {
-	#pragma omp parallel for num_threads(4) default(none)
+	#pragma omp parallel for num_threads(8) default(none)
 	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
