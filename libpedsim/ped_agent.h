@@ -109,9 +109,7 @@ namespace Ped {
 		std::vector< deque<Twaypoint*> > waypointsAll;
 
 		// Vectorized functions:
-		void getNextDestinationsVectorized(int idx);
-		void computeNextDesiredPositionsVectorized(int idx);
-		void computePositionsVectorized(int idx);
+		void computeNextPositionsVectorized(int idx);
 
 	};
 }

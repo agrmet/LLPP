@@ -33,7 +33,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
 	// Set up vectorized agents:
-	if (implementation == VECTOR) {
+	if (implementation == VECTOR || implementation == VECTOROMP) {
 		this->agentsSoA = TagentSoA(agentsInScenario);
 	}
 
@@ -65,15 +65,25 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 
 void Ped::Model::tick()
 {
-	// Vectorized OpenMP
+	// Vectorized ONLY
 	if (this-> implementation == VECTOR) {
+	// Compute each agent's next position, all these computations are vectorized:
+	for (int i = 0; i < agents.size(); i+=4) {
+		this->agentsSoA.computeNextPositionsVectorized(i);
+	}
+	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
+		for (int i = 0; i < agents.size(); i++){
+			agents[i]->setX(this->agentsSoA.xP[i]);
+			agents[i]->setY(this->agentsSoA.yP[i]);
+		}
+	}
+	
+	// Vectorized WITH OMP
+	if (this-> implementation == VECTOROMP) {
 	#pragma omp parallel for num_threads(8) default(none)
 	// Compute each agent's next position, all these computations are vectorized:
 	for (int i = 0; i < agents.size(); i+=4) {
-		// this->agentsSoA.computeNextDesiredPositionsVectorized(i);
-
-		// Merged function, slightly faster:
-		this->agentsSoA.computePositionsVectorized(i);
+		this->agentsSoA.computeNextPositionsVectorized(i);
 	}
 	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
 	#pragma omp parallel for num_threads(8) default(none)
@@ -82,7 +92,6 @@ void Ped::Model::tick()
 			agents[i]->setY(this->agentsSoA.yP[i]);
 		}
 	}
-
 
 	// C++ threads implementation
 	if (this->implementation == PTHREAD) {
