@@ -19,24 +19,71 @@
 #include <stdlib.h>
 int K = 8; // How many threads we will spawn
 
+std::vector<Ped::Tagent *> region1;
+
+std::vector<Ped::Tagent *> region2;
+
+std::vector<Ped::Tagent *> region3;
+
+std::vector<Ped::Tagent *> region4;
+
+set<const Ped::Tagent *> whichRegion(<Ped::Tagent *> &agent)
+{
+
+	switch (agent.getX())
+	{
+	case 0 ... 39:
+		return region1
+		
+	case 40 ... 79:
+		return region2
+
+	case 80 ... 119:
+		return region3
+
+	case 120 ... 159:
+		return region4
+
+	}
+}
+
+// Divide the 2D world into regions and assign agents to regions
+void divideRegions(std::vector<Ped::Tagent *> &agents)
+{
+	for (Ped::Tagent *agent : agents)
+	{
+		switch (agent.getX())
+		{
+		case 0 ... 39:
+			region1.push_back(agent);
+		case 40 ... 79:
+			region2.push_back(agent);
+		case 80 ... 119:
+			region3.push_back(agent);
+		case 120 ... 159:
+			region4.push_back(agent);
+		}
+	}
+}
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
 	// Convenience test: does CUDA work on this machine?
 	cuda_test();
-	
+
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
-	
+	divideRegions(agents);
+
 	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint *>(destinationsInScenario.begin(), destinationsInScenario.end());
 
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
 	// Set up vectorized agents:
-	if (implementation == VECTOR || implementation == VECTOROMP) {
+	if (implementation == VECTOR || implementation == VECTOROMP)
+	{
 		this->agentsSoA = TagentSoA(agentsInScenario);
 	}
-
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
@@ -58,77 +105,114 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
 		// 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
+		// agent->setX(agent->getDesiredX());
+		// agent->setY(agent->getDesiredY());
+
+		move(agent);
 	}
 }
 
 void Ped::Model::tick()
 {
 	// Vectorized ONLY
-	if (this-> implementation == VECTOR) {
-	// Compute each agent's next position, all these computations are vectorized:
-	for (int i = 0; i < agents.size(); i+=4) {
-		this->agentsSoA.computeNextPositionsVectorized(i);
-	}
-	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
-		for (int i = 0; i < agents.size(); i++){
+	if (this->implementation == VECTOR)
+	{
+		// Compute each agent's next position, all these computations are vectorized:
+		for (int i = 0; i < agents.size(); i += 4)
+		{
+			this->agentsSoA.computeNextPositionsVectorized(i);
+		}
+		// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
+		for (int i = 0; i < agents.size(); i++)
+		{
 			agents[i]->setX(this->agentsSoA.xP[i]);
 			agents[i]->setY(this->agentsSoA.yP[i]);
 		}
 	}
-	
+
 	// Vectorized WITH OMP
-	if (this-> implementation == VECTOROMP) {
-	#pragma omp parallel for num_threads(8) default(none)
-	// Compute each agent's next position, all these computations are vectorized:
-	for (int i = 0; i < agents.size(); i+=4) {
-		this->agentsSoA.computeNextPositionsVectorized(i);
-	}
-	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
-	#pragma omp parallel for num_threads(8) default(none)
-		for (int i = 0; i < agents.size(); i++){
+	if (this->implementation == VECTOROMP)
+	{
+#pragma omp parallel for num_threads(8) default(none)
+		// Compute each agent's next position, all these computations are vectorized:
+		for (int i = 0; i < agents.size(); i += 4)
+		{
+			this->agentsSoA.computeNextPositionsVectorized(i);
+		}
+// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
+#pragma omp parallel for num_threads(8) default(none)
+		for (int i = 0; i < agents.size(); i++)
+		{
 			agents[i]->setX(this->agentsSoA.xP[i]);
 			agents[i]->setY(this->agentsSoA.yP[i]);
 		}
 	}
 
 	// C++ threads implementation
-	if (this->implementation == PTHREAD) {
-	std::thread threads[K];
-	for (int i = 0; i < K; i++)
+	if (this->implementation == PTHREAD)
 	{
-		threads[i] = std::thread(agent_tasks, i, agents);
-	}
-	for (int i = 0; i < K; i++)
-	{
-		threads[i].join();
-	}
+		std::thread threads[K];
+		for (int i = 0; i < K; i++)
+		{
+			threads[i] = std::thread(agent_tasks, i, agents);
+		}
+		for (int i = 0; i < K; i++)
+		{
+			threads[i].join();
+		}
 	}
 
 	// OpenMP implementation
-	if (this->implementation == OMP) {
-	#pragma omp parallel for num_threads(8) default(none)
-	for (Ped::Tagent *agent : agents)
+	if (this->implementation == OMP)
 	{
-		// 2) calculate its next desired position
-		agent->computeNextDesiredPosition();
-		// 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
-	}
+	#pragma omp parallel for num_threads(K) default(none)
+		for (Ped::Tagent *agent : agents)
+		{
+			// 2) calculate its next desired position
+			agent->computeNextDesiredPosition();
+			// 3) set its position to the calculated desired one
+			// agent->setX(agent->getDesiredX());
+			// agent->setY(agent->getDesiredY());
+		}
+
+		#pragma omp parallel num_threads(4) default(none)
+		{
+				#pragma omp task
+				for (agent : region1)
+				{
+					move(agent);
+				}
+				#pragma omp task
+				for (agent : region2)
+				{
+					move(agent);
+				}
+				#pragma omp task
+				for (agent : region3)
+				{
+					move(agent);
+				}
+				#pragma omp task
+				for (agent : region4)
+				{
+					move(agent);
+				}
+		}		
 	}
 
 	// Serial implementation
-	if (this->implementation == SEQ) {
-	for (Ped::Tagent *agent : agents)
+	if (this->implementation == SEQ)
 	{
-		// 2) calculate its next desired position
-		agent->computeNextDesiredPosition();
-		// 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
-	}
+		for (Ped::Tagent *agent : agents)
+		{
+			// 2) calculate its next desired position
+			agent->computeNextDesiredPosition();
+			// 3) set its position to the calculated desired one
+			// agent->setX(agent->getDesiredX());
+			// agent->setY(agent->getDesiredY());
+
+			move(agent);
+		}
 	}
 }
 
