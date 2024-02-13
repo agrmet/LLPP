@@ -97,28 +97,34 @@ void Ped::Model::tick()
 	}
 	}
 
-	// OpenMP implementation
+	// OpenMP implementation (collision free)
 	if (this->implementation == OMP) {
 	#pragma omp parallel for num_threads(8) default(none)
 	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
-		// 3) set its position to the calculated desired one
+		/* // 3) set its position to the calculated desired one
 		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
+		agent->setY(agent->getDesiredY()); */
+		
+		// (Assignment 3) 
+		move(agent);
 	}
 	}
 
-	// Serial implementation
+	// Serial implementation (collision free)
 	if (this->implementation == SEQ) {
 	for (Ped::Tagent *agent : agents)
 	{
 		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
-		// 3) set its position to the calculated desired one
+		/* // 3) set its position to the calculated desired one
 		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
+		agent->setY(agent->getDesiredY()); */
+
+		// (Assignment 3)
+		move(agent);
 	}
 	}
 }
@@ -170,7 +176,6 @@ void Ped::Model::move(Ped::Tagent *agent)
 	// Find the first empty alternative position
 	for (std::vector<pair<int, int>>::iterator it = prioritizedAlternatives.begin(); it != prioritizedAlternatives.end(); ++it)
 	{
-
 		// If the current position is not yet taken by any neighbor
 		if (std::find(takenPositions.begin(), takenPositions.end(), *it) == takenPositions.end())
 		{
