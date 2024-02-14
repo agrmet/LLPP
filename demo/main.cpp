@@ -1,12 +1,10 @@
 ///////////////////////////////////////////////////
 // Low Level Parallel Programming 2017.
 //
-// 
+//
 //
 // The main starting point for the crowd simulation.
 //
-
-
 
 #undef max
 #include "ped_model.h"
@@ -29,7 +27,8 @@
 
 #include <stdlib.h>
 
-int main(int argc, char*argv[]) {
+int main(int argc, char *argv[])
+{
 	bool timing_mode = 0;
 	int i = 1;
 	QString scenefile = "scenario.xml";
@@ -67,20 +66,18 @@ int main(int argc, char*argv[]) {
 		// Reading the scenario file and setting up the crowd simulation model
 		Ped::Model model;
 		ParseScenario parser(scenefile);
-		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::VECTOROMP);
+		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::OMP);
 
 		// Default number of steps to simulate. Feel free to change this.
 		const int maxNumberOfStepsToSimulate = 100000;
-		
-				
 
 		// Timing version
 		// Run twice, without the gui, to compare the runtimes.
 		// Compile with timing-release to enable this automatically.
 		if (timing_mode)
 		{
-            //MainWindow mainwindow(model, timing_mode);
-			// Run sequentially
+			// MainWindow mainwindow(model, timing_mode);
+			//  Run sequentially
 
 			double fps_seq, fps_target;
 			{
@@ -92,12 +89,12 @@ int main(int argc, char*argv[]) {
 				std::cout << "Running reference version...\n";
 				auto start = std::chrono::steady_clock::now();
 				simulation.runSimulation(maxNumberOfStepsToSimulate);
-				auto duration_seq = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - start);
-				fps_seq = ((float)simulation.getTickCount()) / ((float)duration_seq.count())*1000.0;
+				auto duration_seq = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+				fps_seq = ((float)simulation.getTickCount()) / ((float)duration_seq.count()) * 1000.0;
 				cout << "Reference time: " << duration_seq.count() << " milliseconds, " << fps_seq << " Frames Per Second." << std::endl;
 			}
 
-			// Change this variable when testing different versions of your code. 
+			// Change this variable when testing different versions of your code.
 			// May need modification or extension in later assignments depending on your implementations
 			Ped::IMPLEMENTATION implementation_to_test = Ped::VECTOROMP;
 			{
@@ -109,20 +106,17 @@ int main(int argc, char*argv[]) {
 				std::cout << "Running target version...\n";
 				auto start = std::chrono::steady_clock::now();
 				simulation.runSimulation(maxNumberOfStepsToSimulate);
-				auto duration_target = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - start);
-				fps_target = ((float)simulation.getTickCount()) / ((float)duration_target.count())*1000.0;
+				auto duration_target = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+				fps_target = ((float)simulation.getTickCount()) / ((float)duration_target.count()) * 1000.0;
 				cout << "Target time: " << duration_target.count() << " milliseconds, " << fps_target << " Frames Per Second." << std::endl;
 			}
 			std::cout << "\n\nSpeedup: " << fps_target / fps_seq << std::endl;
-			
-			
-
 		}
 		// Graphics version
 		else
 		{
-            QApplication app(argc, argv);
-            MainWindow mainwindow(model);
+			QApplication app(argc, argv);
+			MainWindow mainwindow(model);
 
 			PedSimulation simulation(model, &mainwindow, timing_mode);
 
@@ -134,15 +128,10 @@ int main(int argc, char*argv[]) {
 			simulation.runSimulation(maxNumberOfStepsToSimulate);
 			retval = app.exec();
 
-			auto duration = std::chrono::duration_cast<std::chrono::milliseconds> (std::chrono::steady_clock::now() - start);
-			float fps = ((float)simulation.getTickCount()) / ((float)duration.count())*1000.0;
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+			float fps = ((float)simulation.getTickCount()) / ((float)duration.count()) * 1000.0;
 			cout << "Time: " << duration.count() << " milliseconds, " << fps << " Frames Per Second." << std::endl;
-			
 		}
-
-		
-
-		
 	}
 
 	cout << "Done" << endl;

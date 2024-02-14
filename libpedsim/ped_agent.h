@@ -51,6 +51,11 @@ namespace Ped {
 		// Retrieves the agent's waypoints
 		deque<Twaypoint*> getWaypoints() { return waypoints; };
 
+		int getCurrentRegion() const { return currentRegion; }
+		
+        // New method to set the current region
+        void setCurrentRegion(int region) { currentRegion = region; }
+
 	private:
 		Tagent() {};
 
@@ -70,6 +75,9 @@ namespace Ped {
 
 		// The queue of all destinations that this agent still has to visit
 		deque<Twaypoint*> waypoints;
+
+		// New member variable to store the current region
+		int currentRegion; 
 
 		// Internal init function 
 		void init(int posX, int posY);

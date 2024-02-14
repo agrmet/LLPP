@@ -27,23 +27,42 @@ std::vector<Ped::Tagent *> region3;
 
 std::vector<Ped::Tagent *> region4;
 
-set<const Ped::Tagent *> whichRegion(<Ped::Tagent *> &agent)
+std::vector<Ped::Tagent *> *getRegionByPosition(Ped::Tagent *agent)
 {
 
-	switch (agent.getX())
+	switch (agent->getX())
 	{
 	case 0 ... 39:
-		return region1
-		
+		return &region1;
+
 	case 40 ... 79:
-		return region2
+		return &region2;
 
 	case 80 ... 119:
-		return region3
+		return &region3;
 
 	case 120 ... 159:
-		return region4
+		return &region4;
 
+	default:
+		throw std::out_of_range("Agent position out of defined regions.");
+	}
+}
+
+std::vector<Ped::Tagent *> *getCurrentRegion(Ped::Tagent *agent)
+{
+	switch (agent->getCurrentRegion())
+	{
+	case 1:
+		return &region1;
+	case 2:
+		return &region2;
+	case 3:
+		return &region3;
+	case 4:
+		return &region4;
+	default:
+		throw std::out_of_range("Agent's current region is invalid.");
 	}
 }
 
@@ -52,16 +71,20 @@ void divideRegions(std::vector<Ped::Tagent *> &agents)
 {
 	for (Ped::Tagent *agent : agents)
 	{
-		switch (agent.getX())
+		switch (agent->getX())
 		{
 		case 0 ... 39:
 			region1.push_back(agent);
+			agent->setCurrentRegion(1);
 		case 40 ... 79:
 			region2.push_back(agent);
+			agent->setCurrentRegion(2);
 		case 80 ... 119:
 			region3.push_back(agent);
+			agent->setCurrentRegion(3);
 		case 120 ... 159:
 			region4.push_back(agent);
+			agent->setCurrentRegion(4);
 		}
 	}
 }
@@ -165,7 +188,7 @@ void Ped::Model::tick()
 	// OpenMP implementation
 	if (this->implementation == OMP)
 	{
-	#pragma omp parallel for num_threads(K) default(none)
+#pragma omp parallel for num_threads(K) default(none)
 		for (Ped::Tagent *agent : agents)
 		{
 			// 2) calculate its next desired position
@@ -175,29 +198,29 @@ void Ped::Model::tick()
 			// agent->setY(agent->getDesiredY());
 		}
 
-		#pragma omp parallel num_threads(4) default(none)
+#pragma omp parallel num_threads(4) default(none) shared(region1, region2, region3, region4)
 		{
-				#pragma omp task
-				for (agent : region1)
-				{
-					move(agent);
-				}
-				#pragma omp task
-				for (agent : region2)
-				{
-					move(agent);
-				}
-				#pragma omp task
-				for (agent : region3)
-				{
-					move(agent);
-				}
-				#pragma omp task
-				for (agent : region4)
-				{
-					move(agent);
-				}
-		}		
+#pragma omp task
+			for (auto *agent : region1)
+			{
+				move(agent);
+			}
+#pragma omp task
+			for (auto *agent : region2)
+			{
+				move(agent);
+			}
+#pragma omp task
+			for (auto *agent : region3)
+			{
+				move(agent);
+			}
+#pragma omp task
+			for (auto *agent : region4)
+			{
+				move(agent);
+			}
+		}
 	}
 
 	// Serial implementation
@@ -271,6 +294,14 @@ void Ped::Model::move(Ped::Tagent *agent)
 			// Set the agent's position
 			agent->setX((*it).first);
 			agent->setY((*it).second);
+
+			std::vector<Ped::Tagent *> *region = getRegionByPosition(agent);
+			if (!(region == getCurrentRegion(agent)))
+			{
+				region->push_back(agent);
+				getCurrentRegion(agent)->erase(std::remove(getCurrentRegion(agent)->begin(), getCurrentRegion(agent)->end(), agent), getCurrentRegion(agent)->end());
+				agent->setCurrentRegion(region->front()->getCurrentRegion());
+			}
 
 			break;
 		}
