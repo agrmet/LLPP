@@ -15,55 +15,45 @@
 #include "cuda_testkernel.h"
 #include <omp.h>
 #include <thread>
-
 #include <stdlib.h>
-int K = 8; // How many threads we will spawn
+#include <mutex>
 
-std::vector<Ped::Tagent *> region1;
+int K = 4; // How many threads we will spawn
 
-std::vector<Ped::Tagent *> region2;
+int R = 4; // How many regions we will divide the world into
 
-std::vector<Ped::Tagent *> region3;
+// Vector of mutexes for each region
+std::vector<std::mutex> regionMutex(R);
 
-std::vector<Ped::Tagent *> region4;
+// Vector of regions with agents that just changed their region
+std::vector<std::vector<Ped::Tagent *>> regionsChangedAgents(R);
 
-std::vector<Ped::Tagent *> *getRegionByPosition(Ped::Tagent *agent)
+// Vector of regions with agents
+std::vector<std::vector<Ped::Tagent *>> regions(R);
+
+
+int getRegionByPosition(Ped::Tagent *agent)
 {
+	int x = agent->getX();
 
-	switch (agent->getX())
+	if (x < 0 || x >= 160)
 	{
-	case 0 ... 39:
-		return &region1;
-
-	case 40 ... 79:
-		return &region2;
-
-	case 80 ... 119:
-		return &region3;
-
-	case 120 ... 159:
-		return &region4;
-
-	default:
 		throw std::out_of_range("Agent position out of defined regions.");
 	}
+
+	return x / (160 / R);
 }
 
-std::vector<Ped::Tagent *> *getCurrentRegion(Ped::Tagent *agent)
+int getCurrentRegion(Ped::Tagent *agent)
 {
-	switch (agent->getCurrentRegion())
+	int region = agent->getCurrentRegion();
+
+	if (region < 0 || region >= R)
 	{
-	case 1:
-		return &region1;
-	case 2:
-		return &region2;
-	case 3:
-		return &region3;
-	case 4:
-		return &region4;
-	default:
 		throw std::out_of_range("Agent's current region is invalid.");
 	}
+	
+	return region;
 }
 
 // Divide the 2D world into regions and assign agents to regions
@@ -71,21 +61,10 @@ void divideRegions(std::vector<Ped::Tagent *> &agents)
 {
 	for (Ped::Tagent *agent : agents)
 	{
-		switch (agent->getX())
-		{
-		case 0 ... 39:
-			region1.push_back(agent);
-			agent->setCurrentRegion(1);
-		case 40 ... 79:
-			region2.push_back(agent);
-			agent->setCurrentRegion(2);
-		case 80 ... 119:
-			region3.push_back(agent);
-			agent->setCurrentRegion(3);
-		case 120 ... 159:
-			region4.push_back(agent);
-			agent->setCurrentRegion(4);
-		}
+		int region = getRegionByPosition(agent);
+		
+		regions[region].push_back(agent);
+		agent->setCurrentRegion(region);
 	}
 }
 
@@ -95,6 +74,8 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 	cuda_test();
 
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
+	
+	// Divide the 2D world into regions and assign agents to regions
 	divideRegions(agents);
 
 	// Set up destinations
@@ -156,14 +137,14 @@ void Ped::Model::tick()
 	// Vectorized WITH OMP
 	if (this->implementation == VECTOROMP)
 	{
-#pragma omp parallel for num_threads(8) default(none)
+#pragma omp parallel for num_threads(K) default(none)
 		// Compute each agent's next position, all these computations are vectorized:
 		for (int i = 0; i < agents.size(); i += 4)
 		{
 			this->agentsSoA.computeNextPositionsVectorized(i);
 		}
 // Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
-#pragma omp parallel for num_threads(8) default(none)
+#pragma omp parallel for num_threads(K) default(none)
 		for (int i = 0; i < agents.size(); i++)
 		{
 			agents[i]->setX(this->agentsSoA.xP[i]);
@@ -198,28 +179,32 @@ void Ped::Model::tick()
 			// agent->setY(agent->getDesiredY());
 		}
 
-#pragma omp parallel num_threads(4) default(none) shared(region1, region2, region3, region4)
+#pragma omp parallel for num_threads(K) default(none) shared(K, regions, regionsChangedAgents, regionMutex)
+		for (int i = 0; i < K; i++)
 		{
-#pragma omp task
-			for (auto *agent : region1)
+			for (auto *agent : regions[i])
 			{
 				move(agent);
 			}
-#pragma omp task
-			for (auto *agent : region2)
+		}
+
+		// Handle agents changing regions sequentially
+		for (int i = 0; i < K; i++)
+		{
+			for (auto *agent : regionsChangedAgents[i])
 			{
-				move(agent);
+				int new_region = getRegionByPosition(agent);
+				int old_region = i;
+
+				// Remove the agent from the old region
+				regions[old_region].erase(std::remove(regions[old_region].begin(), regions[old_region].end(), agent), regions[old_region].end());
+				// Change the agent's current region
+				agent->setCurrentRegion(new_region);
+				// Insert the agent into the new region
+				regions[new_region].push_back(agent);					
 			}
-#pragma omp task
-			for (auto *agent : region3)
-			{
-				move(agent);
-			}
-#pragma omp task
-			for (auto *agent : region4)
-			{
-				move(agent);
-			}
+			// Clear the list of agents that changed regions
+			regionsChangedAgents[i].clear();
 		}
 	}
 
@@ -295,12 +280,13 @@ void Ped::Model::move(Ped::Tagent *agent)
 			agent->setX((*it).first);
 			agent->setY((*it).second);
 
-			std::vector<Ped::Tagent *> *region = getRegionByPosition(agent);
-			if (!(region == getCurrentRegion(agent)))
+			int new_region = getRegionByPosition(agent);
+			int old_region = getCurrentRegion(agent);
+
+			if (new_region != old_region)
 			{
-				region->push_back(agent);
-				getCurrentRegion(agent)->erase(std::remove(getCurrentRegion(agent)->begin(), getCurrentRegion(agent)->end(), agent), getCurrentRegion(agent)->end());
-				agent->setCurrentRegion(region->front()->getCurrentRegion());
+				// Add the agent to the list of agents that changed regions
+				regionsChangedAgents[new_region].push_back(agent);
 			}
 
 			break;
