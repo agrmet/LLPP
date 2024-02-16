@@ -38,7 +38,7 @@ int getRegionByPosition(Ped::Tagent *agent)
 
 	if (x < 0 || x >= 160)
 	{
-		throw std::out_of_range("Agent position out of defined regions.");
+		throw std::out_of_range("Agent position out of defined regions. X = " + std::to_string(x));
 	}
 
 	return x / (160 / R);
@@ -50,7 +50,7 @@ int getCurrentRegion(Ped::Tagent *agent)
 
 	if (region < 0 || region >= R)
 	{
-		throw std::out_of_range("Agent's current region is invalid.");
+		throw std::out_of_range("Agent's current region is invalid. Region = " + std::to_string(region));
 	}
 	
 	return region;
@@ -286,7 +286,7 @@ void Ped::Model::move(Ped::Tagent *agent)
 			if (new_region != old_region)
 			{
 				// Add the agent to the list of agents that changed regions
-				regionsChangedAgents[new_region].push_back(agent);
+				regionsChangedAgents[old_region].push_back(agent);
 			}
 
 			break;
