@@ -27,6 +27,7 @@ namespace Ped
 	{
 		CUDA,
 		VECTOR,
+		VECTOROMP,
 		OMP,
 		PTHREAD,
 		SEQ

@@ -15,28 +15,79 @@
 #include "cuda_testkernel.h"
 #include <omp.h>
 #include <thread>
-
 #include <stdlib.h>
-int K = 8; // How many threads we will spawn
+#include <mutex>
 
+int K = 4; // How many threads we will spawn
+
+int R = 4; // How many regions we will divide the world into
+
+// Vector of mutexes for each region
+std::vector<std::mutex> regionMutex(R);
+
+// Vector of regions with agents that just changed their region
+std::vector<std::vector<Ped::Tagent *>> regionsChangedAgents(R);
+
+// Vector of regions with agents
+std::vector<std::vector<Ped::Tagent *>> regions(R);
+
+
+int getRegionByPosition(Ped::Tagent *agent)
+{
+	int x = agent->getX();
+
+	if (x < 0 || x >= 160)
+	{
+		throw std::out_of_range("Agent position out of defined regions. X = " + std::to_string(x));
+	}
+
+	return x / (160 / R);
+}
+
+int getCurrentRegion(Ped::Tagent *agent)
+{
+	int region = agent->getCurrentRegion();
+
+	if (region < 0 || region >= R)
+	{
+		throw std::out_of_range("Agent's current region is invalid. Region = " + std::to_string(region));
+	}
+	
+	return region;
+}
+
+// Divide the 2D world into regions and assign agents to regions
+void divideRegions(std::vector<Ped::Tagent *> &agents)
+{
+	for (Ped::Tagent *agent : agents)
+	{
+		int region = getRegionByPosition(agent);
+		
+		regions[region].push_back(agent);
+		agent->setCurrentRegion(region);
+	}
+}
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
 	// Convenience test: does CUDA work on this machine?
 	cuda_test();
-	
+
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
 	
+	// Divide the 2D world into regions and assign agents to regions
+	divideRegions(agents);
+
 	// Set up destinations
 	destinations = std::vector<Ped::Twaypoint *>(destinationsInScenario.begin(), destinationsInScenario.end());
 
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
 	// Set up vectorized agents:
-	if (implementation == VECTOR) {
+	if (implementation == VECTOR || implementation == VECTOROMP)
+	{
 		this->agentsSoA = TagentSoA(agentsInScenario);
 	}
-
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
@@ -58,74 +109,118 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 		// 2) calculate its next desired position
 		agent->computeNextDesiredPosition();
 		// 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY());
+		// agent->setX(agent->getDesiredX());
+		// agent->setY(agent->getDesiredY());
+
+		move(agent);
 	}
 }
 
 void Ped::Model::tick()
 {
-	// Vectorized OpenMP
-	if (this-> implementation == VECTOR) {
-	#pragma omp parallel for num_threads(8) default(none)
-	// Compute each agent's next position, all these computations are vectorized:
-	for (int i = 0; i < agents.size(); i+=4) {
-		// this->agentsSoA.computeNextDesiredPositionsVectorized(i);
-
-		// Merged function, slightly faster:
-		this->agentsSoA.computePositionsVectorized(i);
-	}
-	// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
-	#pragma omp parallel for num_threads(8) default(none)
-		for (int i = 0; i < agents.size(); i++){
+	// Vectorized ONLY
+	if (this->implementation == VECTOR)
+	{
+		// Compute each agent's next position, all these computations are vectorized:
+		for (int i = 0; i < agents.size(); i += 4)
+		{
+			this->agentsSoA.computeNextPositionsVectorized(i);
+		}
+		// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
+		for (int i = 0; i < agents.size(); i++)
+		{
 			agents[i]->setX(this->agentsSoA.xP[i]);
 			agents[i]->setY(this->agentsSoA.yP[i]);
 		}
 	}
 
+	// Vectorized WITH OMP
+	if (this->implementation == VECTOROMP)
+	{
+#pragma omp parallel for num_threads(K) default(none)
+		// Compute each agent's next position, all these computations are vectorized:
+		for (int i = 0; i < agents.size(); i += 4)
+		{
+			this->agentsSoA.computeNextPositionsVectorized(i);
+		}
+// Set x and y coordinates for each agent. This part is not vectorized since Tagent is AoS.
+#pragma omp parallel for num_threads(K) default(none)
+		for (int i = 0; i < agents.size(); i++)
+		{
+			agents[i]->setX(this->agentsSoA.xP[i]);
+			agents[i]->setY(this->agentsSoA.yP[i]);
+		}
+	}
 
 	// C++ threads implementation
-	if (this->implementation == PTHREAD) {
-	std::thread threads[K];
-	for (int i = 0; i < K; i++)
+	if (this->implementation == PTHREAD)
 	{
-		threads[i] = std::thread(agent_tasks, i, agents);
-	}
-	for (int i = 0; i < K; i++)
-	{
-		threads[i].join();
-	}
+		std::thread threads[K];
+		for (int i = 0; i < K; i++)
+		{
+			threads[i] = std::thread(agent_tasks, i, agents);
+		}
+		for (int i = 0; i < K; i++)
+		{
+			threads[i].join();
+		}
 	}
 
-	// OpenMP implementation (collision free)
-	if (this->implementation == OMP) {
-	#pragma omp parallel for num_threads(8) default(none)
-	for (Ped::Tagent *agent : agents)
+	// OpenMP implementation
+	if (this->implementation == OMP)
 	{
-		// 2) calculate its next desired position
-		agent->computeNextDesiredPosition();
-		/* // 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY()); */
-		
-		// (Assignment 3) 
-		move(agent);
-	}
+#pragma omp parallel for num_threads(K) default(none)
+		for (Ped::Tagent *agent : agents)
+		{
+			// 2) calculate its next desired position
+			agent->computeNextDesiredPosition();
+			// 3) set its position to the calculated desired one
+			// agent->setX(agent->getDesiredX());
+			// agent->setY(agent->getDesiredY());
+		}
+
+#pragma omp parallel for num_threads(K) default(none) shared(K, regions, regionsChangedAgents, regionMutex)
+		for (int i = 0; i < K; i++)
+		{
+			for (auto *agent : regions[i])
+			{
+				move(agent);
+			}
+		}
+
+		// Handle agents changing regions sequentially
+		for (int i = 0; i < K; i++)
+		{
+			for (auto *agent : regionsChangedAgents[i])
+			{
+				int new_region = getRegionByPosition(agent);
+				int old_region = i;
+
+				// Remove the agent from the old region
+				regions[old_region].erase(std::remove(regions[old_region].begin(), regions[old_region].end(), agent), regions[old_region].end());
+				// Change the agent's current region
+				agent->setCurrentRegion(new_region);
+				// Insert the agent into the new region
+				regions[new_region].push_back(agent);					
+			}
+			// Clear the list of agents that changed regions
+			regionsChangedAgents[i].clear();
+		}
 	}
 
-	// Serial implementation (collision free)
-	if (this->implementation == SEQ) {
-	for (Ped::Tagent *agent : agents)
+	// Serial implementation
+	if (this->implementation == SEQ)
 	{
-		// 2) calculate its next desired position
-		agent->computeNextDesiredPosition();
-		/* // 3) set its position to the calculated desired one
-		agent->setX(agent->getDesiredX());
-		agent->setY(agent->getDesiredY()); */
+		for (Ped::Tagent *agent : agents)
+		{
+			// 2) calculate its next desired position
+			agent->computeNextDesiredPosition();
+			// 3) set its position to the calculated desired one
+			// agent->setX(agent->getDesiredX());
+			// agent->setY(agent->getDesiredY());
 
-		// (Assignment 3)
-		move(agent);
-	}
+			move(agent);
+		}
 	}
 }
 
@@ -183,6 +278,15 @@ void Ped::Model::move(Ped::Tagent *agent)
 			// Set the agent's position
 			agent->setX((*it).first);
 			agent->setY((*it).second);
+
+			int new_region = getRegionByPosition(agent);
+			int old_region = getCurrentRegion(agent);
+
+			if (new_region != old_region)
+			{
+				// Add the agent to the list of agents that changed regions
+				regionsChangedAgents[old_region].push_back(agent);
+			}
 
 			break;
 		}
