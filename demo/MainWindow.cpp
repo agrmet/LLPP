@@ -76,6 +76,7 @@ void MainWindow::paint() {
 		}
 		else {
 			color = Qt::red;
+			printf("COLLISION! Two agents in the same position");
 		}
 
 		(*it)->paint(color);
