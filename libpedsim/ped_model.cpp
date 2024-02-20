@@ -23,6 +23,7 @@ int K = 4; // How many threads we will spawn
 int R = 4; // How many regions we will divide the world into
 bool PARALLELMOVE = true; // Whether to move agents in parallel or not
 int MAX_X = 160; // Maximum x coordinate of the world (range is 0 to MAX_X)
+bool FIRST_TICK = true; // Ensures that the regions are divided at the first tick
 
 // Vector of mutexes for each border between regions
 // i.e. 4 regions have 3 borders, so we need 3 mutexes
@@ -38,21 +39,16 @@ int getRegionByX(int x)
 {
 	// Used to determine what region a specific x coordinate belongs to
 	if (x < 0) { return 0; }
-	if (x > MAX_X) {	return R - 1; }
-	return x / ((MAX_X + 1) / R);
+	if (x >= MAX_X) { return R - 1; }
+
+	// Floor assures div is rounded down
+	return floor(x / floor((MAX_X + 1) / R));
 }
 
 int getRegionByPosition(Ped::Tagent *agent)
 {
-
 	int x = agent->getX();
-
-	if (x < 0 || x > MAX_X)
-	{
-		throw std::out_of_range("Agent position out of defined regions. X = " + std::to_string(x));
-	}
-
-	return x / ((MAX_X + 1) / R);
+	return getRegionByX(x);
 }
 
 int getCurrentRegion(Ped::Tagent *agent)
@@ -92,13 +88,12 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 	// Sets the chosen implemenation. Standard in the given code is SEQ
 	this->implementation = implementation;
 
+	// Reset the first tick flag in case we are restarting the simulation with a different implementation
+	FIRST_TICK = true;
+
 	// Set up vectorized agents:
 	if (implementation == VECTOR || implementation == VECTOROMP) {
 		this->agentsSoA = TagentSoA(agentsInScenario);
-	}
-	else {
-		// Divide the 2D world into regions and assign agents to regions
-		if (PARALLELMOVE) { divideRegions(agents); }
 	}
 
 	// Set up heatmap (relevant for Assignment 4)
@@ -125,6 +120,23 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 
 void Ped::Model::tick()
 {
+	if (FIRST_TICK && PARALLELMOVE && this->implementation != VECTOR && this->implementation != VECTOROMP) {
+		// Clear the regions and regionsChangedAgents vectors
+		for (int i = 0; i < R; i++) {
+			regions[i].clear();
+			regionsChangedAgents[i].clear();
+		}
+		// Unlock all the region mutexes
+		for (int i = 0; i < (R-1); i++) {
+			regionMutex[i].unlock();
+		}
+
+		// Divide the 2D world into regions and assign agents to regions
+		divideRegions(agents);
+		
+		FIRST_TICK = false;
+	}
+
 	// Vectorized ONLY
 	if (this->implementation == VECTOR)
 	{
