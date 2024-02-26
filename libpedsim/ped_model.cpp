@@ -208,6 +208,8 @@ void Ped::Model::tick()
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
+		updateHeatmapSeq(); // Updates heatmap, independently from moving agents
+
 		if (PARALLELMOVE) { 
 			// Move agents in parallel with OpenMP
 
