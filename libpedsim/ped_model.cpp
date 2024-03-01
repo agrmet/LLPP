@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <mutex>
 #include <math.h>
+#include <future> // for std::async
 
 int K = 4; // How many threads we will spawn
 int R = 4; // How many regions we will divide the world into
@@ -175,6 +176,11 @@ void Ped::Model::tick()
 	// C++ threads implementation
 	if (this->implementation == PTHREAD)
 	{
+		std::future<void> heatmapCUDA;
+		if (heatmapCUDA.valid()) {
+			heatmapCUDA.wait(); // Wait for the heatmap update to finish
+		}
+
 		std::thread threads[K];
 		for (int i = 0; i < K; i++)
 		{
@@ -184,17 +190,32 @@ void Ped::Model::tick()
 		{
 			threads[i].join();
 		}
+
+		heatmapCUDA = std::async(std::launch::async, [&]() {
+			// Update heatmap with CUDA in a separate thread
+			updateHeatmapCUDA();
+		});
 	}
 
 	// OpenMP implementation
 	if (this->implementation == OMP)
 	{
+		std::future<void> heatmapCUDA;
+		if (heatmapCUDA.valid()) {
+			heatmapCUDA.wait(); // Wait for the heatmap update to finish
+		}
+
 	#pragma omp parallel for num_threads(K) default(none)
 		for (Ped::Tagent *agent : agents)
 		{
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
+
+		heatmapCUDA = std::async(std::launch::async, [&]() {
+			// Update heatmap with CUDA in a separate thread
+			updateHeatmapCUDA();
+		});
 	}
 
 	// Serial implementation
@@ -205,11 +226,11 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
+
+		updateHeatmapSeq(); // Updates heatmap sequentially
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
-		updateHeatmapSeq(); // Updates heatmap, independently from moving agents
-
 		if (PARALLELMOVE) { 
 			// Move agents in parallel with OpenMP
 
