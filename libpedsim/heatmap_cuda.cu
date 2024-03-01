@@ -24,12 +24,12 @@ __global__ void createHeatmapKernel(int* heatmap, int size, int* agentsXY, int n
 
     // Each thread handles one agent
     if (threadId < numAgents) {
-        int agenthreadX = agentsXY[threadId * 2 + 1];
-        int agenthreadY = agentsXY[threadId * 2 + 2];
+        int agentX = agentsXY[threadId * 2 + 1];
+        int agentY = agentsXY[threadId * 2 + 2];
 
         // Update heatmap for this agent's position
-        if (agenthreadX >= 0 && agenthreadX < size && agenthreadY >= 0 && agenthreadY < size) {
-            atomicAdd(&heatmap[agenthreadX * size + agenthreadY], 40);
+        if (agentX >= 0 && agentX < size && agentY >= 0 && agentY < size) {
+            atomicAdd(&heatmap[agentX * size + agentY], 40);
         }
     }
 }
