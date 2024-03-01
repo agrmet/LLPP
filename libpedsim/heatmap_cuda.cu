@@ -41,8 +41,8 @@ __global__ void scaleHeatmapKernel(int* heatmap, int size, int* scaled_heatmap, 
 
     if (x < size && y < size) {
         int value = heatmap[y * size + x];
-        for (int cellY = 0; cellY < cellsize; ++cellY) {
-            for (int cellX = 0; cellX < cellsize; ++cellX) {
+        for (int cellY = 0; cellY < cellsize; cellY++) {
+            for (int cellX = 0; cellX < cellsize; cellX++) {
                 scaled_heatmap[(y * cellsize + cellY) * size * cellsize + (x * cellsize + cellX)] = value;
             }
         }
@@ -67,8 +67,8 @@ __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int
     if (threadX < scaled_size && threadY < scaled_size) {
         // Apply gaussian blur filter
         int sum = 0;
-        for (int i = -2; i <= 2; ++i) {
-            for (int j = -2; j <= 2; ++j) {
+        for (int i = -2; i <= 2; i++) {
+            for (int j = -2; j <= 2; j++) {
                 int x = threadX + j;
                 int y = threadY + i;
 
@@ -151,8 +151,8 @@ __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int
 //     // Apply blur filter
 //     if (x < scaled_size && y < scaled_size) {
 //         int sum = 0;
-//         for (int i = -2; i <= 2; ++i) {
-//             for (int j = -2; j <= 2; ++j) {
+//         for (int i = -2; i <= 2; i++) {
+//             for (int j = -2; j <= 2; j++) {
 //                 sum += w[i + 2][j + 2] * sharedMem[threadY + 2 + i][threadX + 2 + j];
 //             }
 //         }
@@ -181,7 +181,7 @@ void Ped::Model::updateHeatmapCUDA() {
 
 	// Transfer agent data (x and y) to GPU
     int* agentsXY = new int[2 * numAgents];
-    for (size_t i = 0; i < numAgents; ++i) {
+    for (int i = 0; i < numAgents; i++) {
         agentsXY[i * 2] = agents[i]->getDesiredX();
         agentsXY[i * 2 + 1] = agents[i]->getDesiredY();
     }
