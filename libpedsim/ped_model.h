@@ -100,6 +100,11 @@ namespace Ped
 
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
+
+		// For heatmapCuda: 
+		void setupHeatmapCuda();
+		void updateHeatmapCuda();
+
 	};
 }
 #endif

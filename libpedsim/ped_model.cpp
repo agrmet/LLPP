@@ -21,7 +21,7 @@
 
 int K = 4; // How many threads we will spawn
 int R = 4; // How many regions we will divide the world into
-bool PARALLELMOVE = true; // Whether to move agents in parallel or not
+bool PARALLELMOVE = false; // Whether to move agents in parallel or not
 int MAX_X = 160; // Maximum x coordinate of the world (range is 0 to MAX_X)
 bool FIRST_TICK = true; // Ensures that the regions are divided at the first tick
 
@@ -98,6 +98,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
+	setupHeatmapCuda();
 }
 
 void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
@@ -195,6 +196,8 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
+		// Update heatmap
+		updateHeatmapCuda();
 	}
 
 	// Serial implementation
@@ -205,6 +208,8 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
+		// Update heatmap
+		updateHeatmapSeq();
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
