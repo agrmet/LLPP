@@ -58,8 +58,13 @@ void MainWindow::paint() {
 	// Uncomment this to paint the heatmap (Assignment 4)
 	const int heatmapSize = model.getHeatmapSize();
 	QImage image((uchar*)*model.getHeatmap(), heatmapSize, heatmapSize, heatmapSize * sizeof(int), QImage::Format_ARGB32);
+<<<<<<< HEAD
 	//QImage image;
 	pixmap->setPixmap(QPixmap::fromImage(image));
+=======
+	// QImage image;
+	 pixmap->setPixmap(QPixmap::fromImage(image));
+>>>>>>> 6df3e73ca87cbcbcfdb4314f5978f088a8cf0a9a
 
 	// Paint all agents: green, if the only agent on that position, otherwise red
 	std::set<std::tuple<int, int> > positionsTaken;
