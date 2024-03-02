@@ -16,6 +16,7 @@
 #include <set>
 
 #include "ped_agent.h"
+#include "cuda_runtime.h"
 
 namespace Ped
 {
@@ -102,6 +103,14 @@ namespace Ped
 		void updateHeatmapSeq();
 
 		// For heatmapCuda: 
+		// heatmap_cuda is a 1D representation of the 2D heatmap.
+		int *heatmap_cuda;
+		int *scaled_heatmap_cuda;
+		int *blurred_heatmap_cuda;
+		cudaStream_t streamCuda;
+
+		int* agentsDesiredX;
+		int* agentsDesiredY;
 		void setupHeatmapCuda();
 		void updateHeatmapCuda();
 
