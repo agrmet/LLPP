@@ -102,15 +102,18 @@ namespace Ped
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
 
-		// For heatmapCuda: 
-		// heatmap_cuda is a 1D representation of the 2D heatmap.
 		int *heatmap_cuda;
 		int *scaled_heatmap_cuda;
 		int *blurred_heatmap_cuda;
 		cudaStream_t streamCuda;
 
+		// agent desired positions 
 		int* agentsDesiredX;
 		int* agentsDesiredY;
+		// had to add these also for some reason (they are just temporary arrays to move from cpu to gpu)
+		int* desXsCPU;
+		int* desYsCPU;
+		
 		void setupHeatmapCuda();
 		void updateHeatmapCuda();
 

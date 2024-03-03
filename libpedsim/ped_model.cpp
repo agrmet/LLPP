@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <mutex>
 #include <math.h>
+#include "heatmap_cuda.h"
 
 int K = 4; // How many threads we will spawn
 int R = 4; // How many regions we will divide the world into
@@ -77,8 +78,11 @@ void divideRegions(std::vector<Ped::Tagent *> &agents)
 
 void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<Twaypoint *> destinationsInScenario, IMPLEMENTATION implementation)
 {
+	
 	// Convenience test: does CUDA work on this machine?
+	printf("hi");
 	cuda_test();
+	printf("hi2");
 
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
 
@@ -98,7 +102,11 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
-	setupHeatmapCuda();
+	
+	if (this->implementation == CUDA) {
+		setupHeatmapCuda();
+	}
+	
 }
 
 void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
@@ -120,7 +128,8 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 }
 
 void Ped::Model::tick()
-{
+{	
+	
 	if (FIRST_TICK && PARALLELMOVE && this->implementation != VECTOR && this->implementation != VECTOROMP) {
 		// Clear the regions and regionsChangedAgents vectors
 		for (int i = 0; i < R; i++) {
@@ -136,6 +145,13 @@ void Ped::Model::tick()
 		divideRegions(agents);
 		
 		FIRST_TICK = false;
+	}
+
+	if (this->implementation == CUDA){
+		for (int i = 0; i < agents.size(); i++){
+			agents[i]->computeNextDesiredPosition();
+		}
+		updateHeatmapCuda();
 	}
 
 	// Vectorized ONLY
@@ -196,8 +212,6 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
-		// Update heatmap
-		updateHeatmapCuda();
 	}
 
 	// Serial implementation
@@ -208,8 +222,6 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
-		// Update heatmap
-		updateHeatmapSeq();
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
@@ -244,6 +256,9 @@ void Ped::Model::tick()
 				}
 				// Clear the list of agents that changed regions
 				regionsChangedAgents[i].clear();
+				if (this->implementation == CUDA) {
+					cudaDeviceSynchronize();
+				}
 			}
 		}
 		else {
@@ -251,6 +266,9 @@ void Ped::Model::tick()
 			for (Ped::Tagent *agent : agents)
 			{
 				move(agent);
+			}
+			if (this->implementation == CUDA) {
+				cudaDeviceSynchronize();
 			}
 		}
 	}
