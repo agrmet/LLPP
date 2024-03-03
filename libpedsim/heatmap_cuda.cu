@@ -17,9 +17,9 @@ void Ped::Model::setupHeatmapCuda(){
     cudaMalloc(&blurred_heatmap_cuda, SCALED_SIZE*SCALED_SIZE*sizeof(int));
 
     // Copy the data from CPU to GPU:
-    cudaMemcpy(heatmap_cuda, heatmap, SIZE*SIZE*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(scaled_heatmap_cuda, scaled_heatmap, SCALED_SIZE*SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(blurred_heatmap_cuda, blurred_heatmap, SCALED_SIZE*SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(heatmap_cuda, heatmap[0], SIZE*SIZE*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(scaled_heatmap_cuda, scaled_heatmap[0], SCALED_SIZE*SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(blurred_heatmap_cuda, blurred_heatmap[0], SCALED_SIZE*SCALED_SIZE*sizeof(int), cudaMemcpyHostToDevice);
 
     // Some agent attributes we need for intensify function:
     cudaMalloc(&agentsDesiredX, agents.size()*sizeof(int));
@@ -54,6 +54,9 @@ void Ped::Model::updateHeatmapCuda(){
     // Scale: each thread scales 1 pixel
     scaleHeatmapCuda<<<SIZE, SIZE, 0, streamCuda>>>(heatmap_cuda, scaled_heatmap_cuda);
     blurHeatmapCuda<<<SIZE, SIZE, 0, streamCuda>>>(scaled_heatmap_cuda, blurred_heatmap_cuda);
+
+    // Copy scaled heatmap data from GPU to CPU
+	cudaMemcpy(blurred_heatmap[0], blurred_heatmap_cuda, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
 }
 
 // Step 1: fade

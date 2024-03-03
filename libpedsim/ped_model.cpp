@@ -222,10 +222,11 @@ void Ped::Model::tick()
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
+		updateHeatmapSeq();
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
-		updateHeatmapSeq(); // Updates heatmap, independently from moving agents
+		
 
 		if (PARALLELMOVE) { 
 			// Move agents in parallel with OpenMP
