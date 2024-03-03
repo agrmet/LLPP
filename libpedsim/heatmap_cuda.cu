@@ -161,14 +161,18 @@ __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int
 //     }
 // }
 
-void Ped::Model::updateHeatmapCUDA() {
+
+void Ped::Model::setupHeatmapCUDA()
+{
     // Allocate GPU memory
-    int* d_heatmap, * d_scaled_heatmap, * d_blurred_heatmap, * d_agents_xy;
-	int numAgents = agents.size();
     cudaMalloc((void**)&d_heatmap, SIZE * SIZE * sizeof(int));
     cudaMalloc((void**)&d_scaled_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int));
     cudaMalloc((void**)&d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int));
-    cudaMalloc((void**)&d_agents_xy, (2 * numAgents) * sizeof(int));
+    cudaMalloc((void**)&d_agents_xy, (2 * agents.size()) * sizeof(int));
+}
+
+void Ped::Model::updateHeatmapCUDA() {
+	int numAgents = agents.size();
 	
 	// Fade the heatmap with CPU
 	for (int x = 0; x < SIZE; x++)
@@ -230,10 +234,4 @@ void Ped::Model::updateHeatmapCUDA() {
     
 	// Copy scaled heatmap data from GPU to CPU
 	cudaMemcpy(blurred_heatmap[0], d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-
-	// Free GPU memory
-    cudaFree(d_heatmap);
-    cudaFree(d_scaled_heatmap);
-    cudaFree(d_blurred_heatmap);
-    cudaFree(d_agents_xy);
 }

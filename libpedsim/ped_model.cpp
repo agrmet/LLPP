@@ -99,6 +99,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
+	setupHeatmapCUDA();
 }
 
 void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)

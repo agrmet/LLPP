@@ -100,6 +100,12 @@ namespace Ped
 
 		void setupHeatmapSeq();
 		void updateHeatmapSeq();
+
+		// GPU variables
+		int *d_heatmap, *d_scaled_heatmap, *d_blurred_heatmap, *d_agents_xy;
+
+		// CUDA functions
+		void setupHeatmapCUDA();
 		void updateHeatmapCUDA();
 	};
 }
