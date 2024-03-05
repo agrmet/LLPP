@@ -99,7 +99,11 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 
 	// Set up heatmap (relevant for Assignment 4)
 	setupHeatmapSeq();
-	setupHeatmapCUDA();
+
+	if (implemenation == CUDA) {
+		// Set up heatmap for CUDA
+		setupHeatmapCUDA();
+	}
 }
 
 void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
@@ -177,11 +181,6 @@ void Ped::Model::tick()
 	// C++ threads implementation
 	if (this->implementation == PTHREAD)
 	{
-		std::future<void> heatmapCUDA;
-		if (heatmapCUDA.valid()) {
-			heatmapCUDA.wait(); // Wait for the heatmap update to finish
-		}
-
 		std::thread threads[K];
 		for (int i = 0; i < K; i++)
 		{
@@ -191,32 +190,17 @@ void Ped::Model::tick()
 		{
 			threads[i].join();
 		}
-
-		heatmapCUDA = std::async(std::launch::async, [&]() {
-			// Update heatmap with CUDA in a separate thread
-			updateHeatmapCUDA();
-		});
 	}
 
 	// OpenMP implementation
 	if (this->implementation == OMP)
 	{
-		std::future<void> heatmapCUDA;
-		if (heatmapCUDA.valid()) {
-			heatmapCUDA.wait(); // Wait for the heatmap update to finish
-		}
-
 	#pragma omp parallel for num_threads(K) default(none)
 		for (Ped::Tagent *agent : agents)
 		{
 			// Calculate its next desired position
 			agent->computeNextDesiredPosition();
 		}
-
-		heatmapCUDA = std::async(std::launch::async, [&]() {
-			// Update heatmap with CUDA in a separate thread
-			updateHeatmapCUDA();
-		});
 	}
 
 	// Serial implementation
@@ -229,6 +213,26 @@ void Ped::Model::tick()
 		}
 
 		updateHeatmapSeq(); // Updates heatmap sequentially
+	}
+
+	// CUDA implementation
+	if (this->implementation == CUDA)
+	{
+		std::future<void> heatmapCUDA;
+		if (heatmapCUDA.valid()) {
+			heatmapCUDA.wait(); // Wait for the heatmap update to finish
+		}
+
+		for (Ped::Tagent *agent : agents)
+		{
+			// Calculate its next desired position
+			agent->computeNextDesiredPosition();
+		}
+
+		heatmapCUDA = std::async(std::launch::async, [&]() {
+			// Update heatmap with CUDA in a separate thread
+			updateHeatmapCUDA();
+		});
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {

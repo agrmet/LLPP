@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 		// Reading the scenario file and setting up the crowd simulation model
 		Ped::Model model;
 		ParseScenario parser(scenefile);
-		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::OMP);
+		model.setup(parser.getAgents(), parser.getWaypoints(), Ped::CUDA);
 
 		// Default number of steps to simulate. Feel free to change this.
 		const int maxNumberOfStepsToSimulate = 100000;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 
 			// Change this variable when testing different versions of your code.
 			// May need modification or extension in later assignments depending on your implementations
-			Ped::IMPLEMENTATION implementation_to_test = Ped::OMP;
+			Ped::IMPLEMENTATION implementation_to_test = Ped::CUDA;
 			{
 				Ped::Model model;
 				ParseScenario parser(scenefile);

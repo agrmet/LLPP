@@ -12,45 +12,69 @@ using namespace std;
 // For CUDA implementation
 #include <cuda_runtime.h>
 
-// Constants for CUDA block sizes
-#define BLOCK_CREATE 1024
-#define BLOCK_SCALE 16
-#define BLOCK_BLUR 32
+// Constants for CUDA block sizes (32 * 32 = 1024 threads per block)
+#define BLOCK_SCALE 32
 
-// CUDA kernel for parallelizing the heatmap creation
-__global__ void createHeatmapKernel(int* heatmap, int size, int* agentsXY, int numAgents) {
+// CUDA kernel for the heatmap fading
+__global__ void fadeHeatmap(int* heatmap) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x < SIZE && y < SIZE) {
+        heatmap[y * SIZE + x] = (int)round(heatmap[y * SIZE + x] * 0.80);
+    }
+}
+
+// CUDA kernel for intensifying heatmap
+__global__ void intensifyHeatmap(int* heatmap, int* agentsX, int* agentsY, int numAgents) {
     int blockId = blockIdx.x + blockIdx.y * gridDim.x;
     int threadId = blockId * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
     // Each thread handles one agent
     if (threadId < numAgents) {
-        int agentX = agentsXY[threadId * 2 + 1];
-        int agentY = agentsXY[threadId * 2 + 2];
+        int agentX = agentsX[threadId];
+        int agentY = agentsY[threadId];
 
         // Update heatmap for this agent's position
-        if (agentX >= 0 && agentX < size && agentY >= 0 && agentY < size) {
-            atomicAdd(&heatmap[agentX * size + agentY], 40);
+        if (agentX >= 0 && agentX < SIZE && agentY >= 0 && agentY < SIZE) {
+            atomicAdd(&heatmap[agentX * SIZE + agentY], 40);
+
+            // int oldValue = atomicAdd(&heatmap[agentX * SIZE + agentY], 40);
+            // if (oldValue + 40 > 255) {
+            //     atomicExch(&heatmap[agentX * SIZE + agentY], 255);
+            // }
         }
     }
 }
 
-// CUDA kernel for parallelizing the heatmap scaling
-__global__ void scaleHeatmapKernel(int* heatmap, int size, int* scaled_heatmap, int cellsize) {
+// CUDA kernel for the heatmap adjustment
+__global__ void adjustHeatmap(int* heatmap) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (x < size && y < size) {
-        int value = heatmap[y * size + x];
+    if (x < SIZE && y < SIZE) {
+        heatmap[y * SIZE + x] = heatmap[y * SIZE + x] < 255 ? heatmap[y * SIZE + x] : 255;
+    }
+}
+
+// CUDA kernel for the heatmap scaling
+__global__ void scaleHeatmap(int* heatmap, int* scaled_heatmap, int cellsize) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x < SIZE && y < SIZE) {
+        int value = heatmap[y * SIZE + x];
+
         for (int cellY = 0; cellY < cellsize; cellY++) {
             for (int cellX = 0; cellX < cellsize; cellX++) {
-                scaled_heatmap[(y * cellsize + cellY) * size * cellsize + (x * cellsize + cellX)] = value;
+                scaled_heatmap[(y * cellsize + cellY) * SIZE * cellsize + (x * cellsize + cellX)] = value;
             }
         }
     }
 }
 
-// CUDA kernel for parallelizing the heatmap blurring
-__global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int scaled_size) {
+// CUDA kernel for the heatmap blurring
+__global__ void blurHeatmap(int* scaled_heatmap, int* blurred_heatmap, int scaled_size) {
     int threadX = blockIdx.x * blockDim.x + threadIdx.x;
     int threadY = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -85,9 +109,9 @@ __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int
     }
 }
 
-// CUDA kernel for parallelizing the heatmap blurring with shared memory
-// __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int scaled_size) {
-//     __shared__ int sharedMem[BLOCK_BLUR + 4][BLOCK_BLUR + 4]; // Allocate shared memory with padding
+// CUDA kernel for the heatmap blurring with shared memory
+// __global__ void blurHeatmap(int* scaled_heatmap, int* blurred_heatmap, int scaled_size) {
+//     __shared__ int sharedMem[BLOCK_SCALE + 4][BLOCK_SCALE + 4]; // Allocate shared memory with padding
 
 //     int threadX = threadIdx.x;
 //     int threadY = threadIdx.y;
@@ -161,76 +185,59 @@ __global__ void blurHeatmapKernel(int* scaled_heatmap, int* blurred_heatmap, int
 //     }
 // }
 
-
 void Ped::Model::setupHeatmapCUDA()
 {
     // Allocate GPU memory
     cudaMalloc((void**)&d_heatmap, SIZE * SIZE * sizeof(int));
     cudaMalloc((void**)&d_scaled_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int));
     cudaMalloc((void**)&d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int));
-    cudaMalloc((void**)&d_agents_xy, (2 * agents.size()) * sizeof(int));
+    cudaMalloc((void**)&d_agents_x, agents.size() * sizeof(int));
+    cudaMalloc((void**)&d_agents_y, agents.size() * sizeof(int));
+
+    // Copy data from CPU to GPU
+    cudaMemcpy(d_heatmap, heatmap[0], SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_scaled_heatmap, scaled_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_blurred_heatmap, blurred_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
 }
 
 void Ped::Model::updateHeatmapCUDA() {
 	int numAgents = agents.size();
+    dim3 blockSizeScale(BLOCK_SCALE, BLOCK_SCALE);
+    dim3 gridSizeScale((SIZE + blockSizeScale.x - 1) / blockSizeScale.x, (SIZE + blockSizeScale.y - 1) / blockSizeScale.y);
 	
-	// Fade the heatmap with CPU
-	for (int x = 0; x < SIZE; x++)
-	{
-		for (int y = 0; y < SIZE; y++)
-		{
-			heatmap[y][x] = (int)round(heatmap[y][x] * 0.80);
-		}
-	}
+    // CALL KERNEL: fade the heatmap
+    fadeHeatmap<<<gridSizeScale, blockSizeScale>>>(d_heatmap);
 
 	// Transfer agent data (x and y) to GPU
-    int* agentsXY = new int[2 * numAgents];
+    int* agentsX = new int[numAgents];
+    int* agentsY = new int[numAgents];
     for (int i = 0; i < numAgents; i++) {
-        agentsXY[i * 2] = agents[i]->getDesiredX();
-        agentsXY[i * 2 + 1] = agents[i]->getDesiredY();
+        agentsX[i] = agents[i]->getDesiredX();
+        agentsY[i] = agents[i]->getDesiredY();
     }
 
-	// Copy agent and heatmap data to GPU
-    cudaMemcpy(d_agents_xy, agentsXY, (2 * numAgents) * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_heatmap, heatmap[0], SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
-
+	// Copy agent data to GPU
+    cudaMemcpy(d_agents_x, agentsX, numAgents * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_agents_y, agentsY, numAgents * sizeof(int), cudaMemcpyHostToDevice);
+    
+    cudaDeviceSynchronize();
     // CALL KERNEL: create the heatmap
-    int numBlocks = (numAgents + BLOCK_CREATE - 1) / BLOCK_CREATE;
-    dim3 gridSize(numBlocks, 1);
-    createHeatmapKernel<<<gridSize, BLOCK_CREATE>>>(d_heatmap, SIZE, d_agents_xy, numAgents);
+    dim3 gridSize(((numAgents + SIZE - 1) / SIZE), 1);
+    intensifyHeatmap<<<gridSize, SIZE>>>(d_heatmap, d_agents_x, d_agents_y, numAgents);
 
-    // Synchronize to ensure all CUDA operations are finished
     cudaDeviceSynchronize();
 
-    // Copy heatmap from GPU to CPU
-    cudaMemcpy(heatmap[0], d_heatmap, SIZE * SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+    // ADJUSTING HEATMAP VALUES, NOT NEEDED?
+    // adjustHeatmap<<<gridSizeScale, blockSizeScale>>>(d_heatmap);
+    // cudaDeviceSynchronize();
 
-	// Adjust heatmap values to be max 255 with CPU
-	for (int x = 0; x < SIZE; x++)
-	{
-		for (int y = 0; y < SIZE; y++)
-		{
-			heatmap[y][x] = heatmap[y][x] < 255 ? heatmap[y][x] : 255;
-		}
-	}
-
-	// Copy adjusted heatmap to GPU
-	cudaMemcpy(d_heatmap, heatmap[0], SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
-	
 	// CALL KERNEL: scale the heatmap
-	dim3 blockSizeScale(BLOCK_SCALE, BLOCK_SCALE);
-    dim3 gridSizeScale((SIZE + blockSizeScale.x - 1) / blockSizeScale.x, (SIZE + blockSizeScale.y - 1) / blockSizeScale.y);
-    scaleHeatmapKernel<<<gridSizeScale, blockSizeScale>>>(d_heatmap, SIZE, d_scaled_heatmap, CELLSIZE);
+	scaleHeatmap<<<gridSizeScale, blockSizeScale>>>(d_heatmap, d_scaled_heatmap, CELLSIZE);
     
-	// UNNECESSARY? Copy scaled heatmap data from GPU to CPU
-	// cudaMemcpy(scaled_heatmap[0], d_scaled_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
-	// OPTIONAL: Sync instead of copying data back to CPU
 	cudaDeviceSynchronize();
 
 	// CALL KERNEL: blur the heatmap
-	dim3 blockSizeBlur(BLOCK_BLUR, BLOCK_BLUR); // Adjust block size for blur kernel
-    dim3 gridSizeBlur((SCALED_SIZE + blockSizeBlur.x - 1) / blockSizeBlur.x, (SCALED_SIZE + blockSizeBlur.y - 1) / blockSizeBlur.y);
-    blurHeatmapKernel<<<gridSizeBlur, blockSizeBlur>>>(d_scaled_heatmap, d_blurred_heatmap, SCALED_SIZE);
+	blurHeatmap<<<gridSizeScale, blockSizeScale>>>(d_scaled_heatmap, d_blurred_heatmap, SCALED_SIZE);
     
 	// Copy scaled heatmap data from GPU to CPU
 	cudaMemcpy(blurred_heatmap[0], d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
