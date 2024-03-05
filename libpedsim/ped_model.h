@@ -17,6 +17,8 @@
 
 #include "ped_agent.h"
 #include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+#include "heatmap_cuda.h"
 
 namespace Ped
 {

@@ -9,9 +9,6 @@
 // heatmap_cuda is a 1D representation of the 2D heatmap.
 
 
-void setupHeatmapCuda();
-void updateHeatmapCuda();
-
 __global__ void fadeHeatmapCuda(int *heatmap_cuda);
 __global__ void intensifyHeatmapCuda(int *heatmap_cuda, int *agentsDesiredX, int *agentsDesiredY);
 __global__ void scaleHeatmapCuda(int *heatmap_cuda, int *scaled_heatmap_cuda);

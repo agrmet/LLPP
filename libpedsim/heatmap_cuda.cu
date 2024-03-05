@@ -5,9 +5,10 @@
 #include "ped_model.h"
 #include "heatmap_cuda.h"
 
+
 // Initialize cuda streams, allocate memory on GPU and copy heatmap from CPU to GPU:
 void Ped::Model::setupHeatmapCuda(){
-    printf("hi");
+    printf("setting up heatmapcuda");
     // Create a stream 'streamCuda':
     cudaStreamCreate(&streamCuda);
 
@@ -45,6 +46,15 @@ void Ped::Model::setupHeatmapCuda(){
 
 // Call on kernels (functions) to update the heatmap:
 void Ped::Model::updateHeatmapCuda(){
+    printf("updating heatmapcuda...");
+      // läsa in alla jävla agentskiter.
+    for (int i = 0; i < agents.size(); i++){
+        Ped::Tagent* agent = agents[i];
+        desXsCPU[i] = agent->getDesiredX();
+        desYsCPU[i] = agent->getDesiredY();
+    }
+    cudaMemcpyAsync(desXsCPU, agentsDesiredX, agents.size()*sizeof(int), cudaMemcpyHostToDevice, streamCuda);
+    cudaMemcpyAsync(desYsCPU, agentsDesiredY, agents.size()*sizeof(int), cudaMemcpyHostToDevice, streamCuda);
     // Call using the same stream (the calls needs to be executed in order)
     // Kernel execution configuration: <<<grid, block, shared, stream>>>
     // Fade: each thread gets 1 pixel to work on (grid = SIZE, block = SIZE, total threads = SIZE * SIZE):
@@ -53,10 +63,12 @@ void Ped::Model::updateHeatmapCuda(){
     intensifyHeatmapCuda<<<1, agents.size(), 0, streamCuda>>>(heatmap_cuda, agentsDesiredX, agentsDesiredY);
     // Scale: each thread scales 1 pixel
     scaleHeatmapCuda<<<SIZE, SIZE, 0, streamCuda>>>(heatmap_cuda, scaled_heatmap_cuda);
-    blurHeatmapCuda<<<SIZE, SIZE, 0, streamCuda>>>(scaled_heatmap_cuda, blurred_heatmap_cuda);
+    blurHeatmapCuda<<<SIZE, SIZE, 9*sizeof(int*), streamCuda>>>(scaled_heatmap_cuda, blurred_heatmap_cuda);
 
     // Copy scaled heatmap data from GPU to CPU
-	cudaMemcpy(blurred_heatmap[0], blurred_heatmap_cuda, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpyAsync(blurred_heatmap[0], blurred_heatmap_cuda, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+    //cudaMemcpyAsync(scaled_heatmap[0], scaled_heatmap_cuda, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+    //cudaMemcpyAsync(heatmap[0], heatmap_cuda, SIZE * SIZE * sizeof(int), cudaMemcpyDeviceToHost);
 }
 
 // Step 1: fade
@@ -86,6 +98,7 @@ __global__ void scaleHeatmapCuda(int *heatmap_cuda, int *scaled_heatmap_cuda){
 
     int y = idx / SIZE; // Calculate y coordinate (row) in original heatmap
     int x = idx % SIZE; // Calculate x coordinate (column) in original heatmap
+
 
     // conversion from 2D to 1D:
     // index1D = row * rowWidth + column

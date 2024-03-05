@@ -19,6 +19,10 @@
 #include <mutex>
 #include <math.h>
 #include "heatmap_cuda.h"
+#include "device_launch_parameters.h"
+#include <chrono>
+#include "cuda_runtime.h"
+#include <stdio.h>
 
 int K = 4; // How many threads we will spawn
 int R = 4; // How many regions we will divide the world into
@@ -80,9 +84,7 @@ void Ped::Model::setup(std::vector<Ped::Tagent *> agentsInScenario, std::vector<
 {
 	
 	// Convenience test: does CUDA work on this machine?
-	printf("hi");
 	cuda_test();
-	printf("hi2");
 
 	agents = std::vector<Ped::Tagent *>(agentsInScenario.begin(), agentsInScenario.end());
 
@@ -129,6 +131,7 @@ void agent_tasks(int thread_id, std::vector<Ped::Tagent *> agents)
 
 void Ped::Model::tick()
 {	
+
 	
 	if (FIRST_TICK && PARALLELMOVE && this->implementation != VECTOR && this->implementation != VECTOROMP) {
 		// Clear the regions and regionsChangedAgents vectors
@@ -147,7 +150,8 @@ void Ped::Model::tick()
 		FIRST_TICK = false;
 	}
 
-	if (this->implementation == CUDA){
+	// CUDA
+	if (this->implementation == CUDA) {
 		for (int i = 0; i < agents.size(); i++){
 			agents[i]->computeNextDesiredPosition();
 		}
@@ -226,8 +230,6 @@ void Ped::Model::tick()
 	}
 
 	if (this->implementation != VECTOR && this->implementation != VECTOROMP) {
-		
-
 		if (PARALLELMOVE) { 
 			// Move agents in parallel with OpenMP
 
@@ -407,4 +409,12 @@ Ped::Model::~Model()
 				  { delete agent; });
 	std::for_each(destinations.begin(), destinations.end(), [](Ped::Twaypoint *destination)
 				  { delete destination; });
+	delete desXsCPU;
+    delete desYsCPU;
+    cudaFree(agentsDesiredY);
+    cudaFree(agentsDesiredX);
+	cudaFree(heatmap_cuda);
+	cudaFree(scaled_heatmap_cuda);
+	cudaFree(blurred_heatmap_cuda);
+	cudaFree(streamCuda);
 }
