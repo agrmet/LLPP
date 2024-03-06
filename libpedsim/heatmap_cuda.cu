@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <cmath>
+#include <chrono>
 using namespace std;
 
 // Memory leak check with msvc++
@@ -138,6 +139,8 @@ void Ped::Model::setupHeatmapCUDA()
 }
 
 void Ped::Model::updateHeatmapCUDA() {
+    auto startTime = chrono::high_resolution_clock::now(); // Start timing
+    
 	int numAgents = agents.size();
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize((SIZE + blockSize.x - 1) / blockSize.x, (SIZE + blockSize.y - 1) / blockSize.y);
@@ -169,4 +172,9 @@ void Ped::Model::updateHeatmapCUDA() {
     
 	// Copy blurred heatmap data from GPU to CPU
 	cudaMemcpy(blurred_heatmap[0], d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+
+    // Stop timing and print duration
+    auto endTime = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> duration = endTime - startTime;
+	printf("updateHeatmapCUDA timer: %f ms\n", duration.count());
 }
