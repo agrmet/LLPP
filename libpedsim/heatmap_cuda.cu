@@ -15,14 +15,13 @@ using namespace std;
 
 // Constant for CUDA
 #define BLOCK_SIZE 32
-#define TILE_SIZE 32
 
 // CUDA kernel for the heatmap fading
 __global__ void fadeHeatmap(int* d_heatmap) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (x < SIZE && y < SIZE) {
+    if (x >= 0 && x < SIZE && y >= 0 && y < SIZE) {
         d_heatmap[y * SIZE + x] = (int)round(d_heatmap[y * SIZE + x] * 0.80);
     }
 }
@@ -53,12 +52,12 @@ __global__ void scaleHeatmap(int* d_heatmap, int* scaled_heatmap) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (x < SIZE && y < SIZE) {
+    if (x >= 0 && x < SIZE && y >= 0 && y < SIZE) {
         int value = d_heatmap[y * SIZE + x];
 
         for (int cellY = 0; cellY < CELLSIZE; cellY++) {
             for (int cellX = 0; cellX < CELLSIZE; cellX++) {
-                scaled_heatmap[(y * CELLSIZE + cellY) * SIZE * CELLSIZE + (x * CELLSIZE + cellX)] = value;
+                scaled_heatmap[(y * CELLSIZE + cellY) * SCALED_SIZE + (x * CELLSIZE + cellX)] = value;
             }
         }
     }
@@ -66,20 +65,21 @@ __global__ void scaleHeatmap(int* d_heatmap, int* scaled_heatmap) {
 
 // CUDA kernel for the heatmap blurring
 __global__ void blurHeatmap(int* scaled_heatmap, int* blurred_heatmap) {
-    __shared__ int shared_data[TILE_SIZE + 4][TILE_SIZE + 4]; // Allocate shared memory tile
-    
+    // Shared mem for the block, TILE has 2 extra cells on each side
+    __shared__ int shared_data[BLOCK_SIZE + 4][BLOCK_SIZE + 4];
+   
+    // Position of this thread in the grid
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-    // Compute indices for reading and writing to shared memory
+    // Position for shared mem (offset by 2 to handle border cases)
     int sharedX = threadIdx.x + 2;
     int sharedY = threadIdx.y + 2;
 
-    // Load data from global memory into shared memory
-    if (x < SCALED_SIZE && y < SCALED_SIZE) {
+    // Load data from scaled_heatmap into shared mem
+    if (x >= 0 && x < SCALED_SIZE && y >= 0 && y < SCALED_SIZE) {
         shared_data[sharedY][sharedX] = scaled_heatmap[y * SCALED_SIZE + x];
     }
-    // Handle border cases by loading additional data into shared memory
+    // If this thread is close to the block borders, load extra data into shared mem
     if (threadIdx.x < 2) {
         if (x - 2 >= 0) {
             shared_data[sharedY][threadIdx.x] = scaled_heatmap[y * SCALED_SIZE + (x - 2)];
@@ -97,7 +97,7 @@ __global__ void blurHeatmap(int* scaled_heatmap, int* blurred_heatmap) {
         }
     }
 
-    __syncthreads(); // All data loaded into shared memory
+    __syncthreads(); // Wait for all data to be loaded into shared mem
 
     // Weights for blur filter
     const int w[5][5] = {
@@ -109,11 +109,11 @@ __global__ void blurHeatmap(int* scaled_heatmap, int* blurred_heatmap) {
     };
     int weightsum = 273;
 
-    if (x < SCALED_SIZE && y < SCALED_SIZE) {
-        // Apply gaussian blur filter using data from shared memory
+    if (x >= 0 && x < SCALED_SIZE && y >= 0 && y < SCALED_SIZE) {
+        // Apply blur filter using data from shared mem
         int sum = 0;
-        for (int i = -2; i <= 2; ++i) {
-            for (int j = -2; j <= 2; ++j) {
+        for (int i = -2; i <= 2; i++) {
+            for (int j = -2; j <= 2; j++) {
                 sum += w[i + 2][j + 2] * shared_data[sharedY + i][sharedX + j];
             }
         }
@@ -134,8 +134,10 @@ void Ped::Model::setupHeatmapCUDA()
 
     // Copy data from CPU to GPU
     cudaMemcpy(d_heatmap, heatmap[0], SIZE * SIZE * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_scaled_heatmap, scaled_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_blurred_heatmap, blurred_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+    
+    // No need to copy these to GPU (?!), as they are empty at this point:
+    // cudaMemcpy(d_scaled_heatmap, scaled_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_blurred_heatmap, blurred_heatmap[0], SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyHostToDevice);
 }
 
 void Ped::Model::updateHeatmapCUDA() {
@@ -147,10 +149,10 @@ void Ped::Model::updateHeatmapCUDA() {
 	
     // CALL KERNEL: fade the heatmap
     fadeHeatmap<<<gridSize, blockSize>>>(d_heatmap);
-
+    
 	// Transfer agent data (x and y) to GPU
-    int* agentsX = new int[numAgents];
-    int* agentsY = new int[numAgents];
+    int *agentsX = new int[numAgents];
+    int *agentsY = new int[numAgents];
     for (int i = 0; i < numAgents; i++) {
         agentsX[i] = agents[i]->getDesiredX();
         agentsY[i] = agents[i]->getDesiredY();
