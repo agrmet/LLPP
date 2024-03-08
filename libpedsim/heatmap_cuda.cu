@@ -141,15 +141,13 @@ void Ped::Model::setupHeatmapCUDA()
 }
 
 void Ped::Model::updateHeatmapCUDA() {
-    auto startTime = chrono::high_resolution_clock::now(); // Start timing
+    // auto startTime = chrono::high_resolution_clock::now(); // Start timing
     
 	int numAgents = agents.size();
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize((SIZE + blockSize.x - 1) / blockSize.x, (SIZE + blockSize.y - 1) / blockSize.y);
 	
-    // CALL KERNEL: fade the heatmap
-    fadeHeatmap<<<gridSize, blockSize>>>(d_heatmap);
-    
+    auto startTime0 = chrono::high_resolution_clock::now();
 	// Transfer agent data (x and y) to GPU
     int *agentsX = new int[numAgents];
     int *agentsY = new int[numAgents];
@@ -159,24 +157,50 @@ void Ped::Model::updateHeatmapCUDA() {
     }
     cudaMemcpy(d_agents_x, agentsX, numAgents * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_agents_y, agentsY, numAgents * sizeof(int), cudaMemcpyHostToDevice);
+	auto endTime0 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> memcpyTime = endTime0 - startTime0;
+
+    // CALL KERNEL: fade the heatmap
+    auto startTime1 = chrono::high_resolution_clock::now();
+    fadeHeatmap<<<gridSize, blockSize>>>(d_heatmap);
+    cudaDeviceSynchronize();
+	auto endTime1 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> fadeTime = endTime1 - startTime1;
     
     // CALL KERNEL: intensify the heatmap (1 dim block in this implementation)
-    cudaDeviceSynchronize();
+    auto startTime2 = chrono::high_resolution_clock::now();
     dim3 gridSizeIntensify((numAgents + BLOCK_SIZE - 1) / BLOCK_SIZE, 1);
     intensifyHeatmap<<<gridSizeIntensify, BLOCK_SIZE>>>(d_heatmap, d_agents_x, d_agents_y, numAgents);
+    cudaDeviceSynchronize();
+	auto endTime2 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> intensifyTime = endTime2 - startTime2;
 
     // CALL KERNEL: scale the heatmap
-    cudaDeviceSynchronize();
+    auto startTime3 = chrono::high_resolution_clock::now();
 	scaleHeatmap<<<gridSize, blockSize>>>(d_heatmap, d_scaled_heatmap);
-    
-	// CALL KERNEL: blur the heatmap
-	blurHeatmap<<<gridSize, blockSize>>>(d_scaled_heatmap, d_blurred_heatmap);
-    
-	// Copy blurred heatmap data from GPU to CPU
-	cudaMemcpy(blurred_heatmap[0], d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+	auto endTime3 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> scaleTime = endTime3 - startTime3;
 
-    // Stop timing and print duration
-    auto endTime = chrono::high_resolution_clock::now();
-    chrono::duration<double, std::milli> duration = endTime - startTime;
-	printf("updateHeatmapCUDA timer: %f ms\n", duration.count());
+	// CALL KERNEL: blur the heatmap
+    auto startTime4 = chrono::high_resolution_clock::now();
+	blurHeatmap<<<gridSize, blockSize>>>(d_scaled_heatmap, d_blurred_heatmap);
+	auto endTime4 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> blurTime = endTime4 - startTime4;
+
+	// Copy blurred heatmap data from GPU to CPU
+    auto startTime5 = chrono::high_resolution_clock::now();
+	cudaMemcpy(blurred_heatmap[0], d_blurred_heatmap, SCALED_SIZE * SCALED_SIZE * sizeof(int), cudaMemcpyDeviceToHost);
+	auto endTime5 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> memcpyTime2 = endTime5 - startTime5;
+
+    // // Stop timing and print duration
+    // auto endTime = chrono::high_resolution_clock::now();
+    // chrono::duration<double, std::milli> duration = endTime - startTime;
+	// printf("updateHeatmapCUDA timer: %f ms\n", duration.count());
+
+    printf("memcpyTime: %f\n", memcpyTime.count() + memcpyTime2.count());
+    printf("fadeTime: %f\n", fadeTime.count());
+    printf("intensifyTime: %f\n", intensifyTime.count());
+    printf("scaleTime: %f\n", scaleTime.count());
+    printf("blurTime: %f\n", blurTime.count());
 }

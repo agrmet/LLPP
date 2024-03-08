@@ -39,8 +39,9 @@ void Ped::Model::setupHeatmapSeq()
 // Updates the heatmap according to the agent positions
 void Ped::Model::updateHeatmapSeq()
 {
-    auto startTime = chrono::high_resolution_clock::now(); // Start timing
+    // auto startTime = chrono::high_resolution_clock::now(); // Start timing
 
+    auto startTime1 = chrono::high_resolution_clock::now();
 	for (int x = 0; x < SIZE; x++)
 	{
 		for (int y = 0; y < SIZE; y++)
@@ -49,7 +50,10 @@ void Ped::Model::updateHeatmapSeq()
 			heatmap[y][x] = (int)round(heatmap[y][x] * 0.80);
 		}
 	}
+	auto endTime1 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> fadeTime = endTime1 - startTime1;
 
+	auto startTime2 = chrono::high_resolution_clock::now();
 	// Count how many agents want to go to each location
 	for (int i = 0; i < agents.size(); i++)
 	{
@@ -74,7 +78,10 @@ void Ped::Model::updateHeatmapSeq()
 			heatmap[y][x] = heatmap[y][x] < 255 ? heatmap[y][x] : 255;
 		}
 	}
+	auto endTime2 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> intensifyTime = endTime2 - startTime2;
 
+	auto startTime3 = chrono::high_resolution_clock::now();
 	// Scale the data for visual representation
 	for (int y = 0; y < SIZE; y++)
 	{
@@ -90,7 +97,10 @@ void Ped::Model::updateHeatmapSeq()
 			}
 		}
 	}
+	auto endTime3 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> scaleTime = endTime3 - startTime3;
 
+	auto startTime4 = chrono::high_resolution_clock::now();
 	// Weights for blur filter
 	const int w[5][5] = {
 		{ 1, 4, 7, 4, 1 },
@@ -118,11 +128,18 @@ void Ped::Model::updateHeatmapSeq()
 			blurred_heatmap[i][j] = 0x00FF0000 | value << 24;
 		}
 	}
+	auto endTime4 = chrono::high_resolution_clock::now();
+    chrono::duration<double, std::milli> blurTime = endTime4 - startTime4;
+
+	printf("fadeTime: %f\n", fadeTime.count());
+    printf("intensifyTime: %f\n", intensifyTime.count());
+    printf("scaleTime: %f\n", scaleTime.count());
+    printf("blurTime: %f\n", blurTime.count());
 
 	// Stop timing and print duration
-    auto endTime = chrono::high_resolution_clock::now();
-    chrono::duration<double, std::milli> duration = endTime - startTime;
-	printf("updateHeatmapSeq timer: %f ms\n", duration.count());
+    // auto endTime = chrono::high_resolution_clock::now();
+    // chrono::duration<double, std::milli> duration = endTime - startTime;
+	// printf("updateHeatmapSeq timer: %f ms\n", duration.count());
 }
 
 int Ped::Model::getHeatmapSize() const {
